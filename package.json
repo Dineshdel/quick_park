@@ -1,0 +1,33 @@
+{
+  "name": "quick-park",
+  "private": true,
+  "packageManager": "pnpm@10.34.9",
+  "engines": {
+    "node": ">=20.9"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "test:e2e": "turbo run test:e2e",
+    "format": "prettier --write .",
+    "seed:admin": "pnpm --filter @qp/backend seed:admin",
+    "db:generate": "pnpm --filter @qp/backend db:generate",
+    "db:migrate": "pnpm --filter @qp/backend db:migrate",
+    "db:deploy": "pnpm --filter @qp/backend db:deploy",
+    "db:studio": "pnpm --filter @qp/backend db:studio",
+    "dev:backend": "pnpm --filter @qp/backend dev",
+    "dev:frontend": "pnpm --filter @qp/frontend dev"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.5",
+    "eslint": "9.39.5",
+    "eslint-plugin-react-hooks": "5.2.0",
+    "prettier": "3.6.2",
+    "turbo": "2.11.13",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.46.2"
+  }
+}
