@@ -75,7 +75,7 @@ export async function createTestApp(): Promise<TestContext> {
     .overrideProvider(GoogleTokenVerifier)
     .useValue(new FakeGoogleVerifier())
     .compile();
-  const app = moduleRef.createNestApplication<NestExpressApplication>({ logger: false });
+  const app = moduleRef.createNestApplication<NestExpressApplication>({ logger: false, rawBody: true });
   configureApp(app);
   await app.init();
 

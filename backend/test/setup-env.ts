@@ -13,4 +13,10 @@ Object.assign(process.env, {
   GOOGLE_CLIENT_ID: 'test-google-client-id',
   JWT_ACCESS_SECRET: 'test-secret-test-secret-test-secret-123',
   WEB_ORIGIN: 'http://localhost:3000',
+  // Tests cover the production behaviour, whatever the developer's .env says.
+  REQUIRE_EMAIL_VERIFICATION: 'true',
+  SCHEDULER_ENABLED: 'false',
+  PAYMENTS_DRIVER: 'mock',
+  STORAGE_DRIVER: 'local',
+  STORAGE_DIR: './storage-test',
 });

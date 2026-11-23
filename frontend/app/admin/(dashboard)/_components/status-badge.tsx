@@ -1,0 +1,14 @@
+import { cn } from '@/shared/lib/utils';
+
+export function StatusBadge({ active, label }: { active: boolean; label?: string }) {
+  return (
+    <span
+      className={cn(
+        'inline-flex rounded-full px-2 py-0.5 text-xs font-medium',
+        active ? 'bg-success/15 text-success' : 'bg-muted text-muted-foreground',
+      )}
+    >
+      {label ?? (active ? 'Active' : 'Inactive')}
+    </span>
+  );
+}

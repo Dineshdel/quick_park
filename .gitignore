@@ -9,3 +9,8 @@ coverage/
 !.env.example
 next-env.d.ts
 *.log
+backend/storage/
+backend/storage-test/
+frontend/.next-build/
+frontend/test-results/
+frontend/playwright-report/

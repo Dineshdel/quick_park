@@ -57,6 +57,9 @@ model User {
   authAccounts  AuthAccount[]
   emailTokens   EmailToken[]
   refreshTokens RefreshToken[]
+  vehicles      Vehicle[]
+  owner         Owner?
+  bookings      Booking[]
 
   @@map("users")
 }
@@ -110,4 +113,529 @@ model RefreshToken {
   @@index([userId])
   @@index([familyId])
   @@map("refresh_tokens")
+}
+
+// ---------- Masters (M2): admin-managed reference data ----------
+
+/// A table rather than an enum so admins can add types (PDF: "more types can be added").
+model VehicleType {
+  id        String   @id @default(uuid()) @db.Uuid
+  /// Stable machine code (CAR, BIKE, ...). Immutable after creation.
+  code      String   @unique
+  name      String
+  /// lucide-react icon name, e.g. "car".
+  icon      String?
+  sortOrder Int      @default(0) @map("sort_order")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  vehicles   Vehicle[]
+  capacities LocationCapacity[]
+  prices     PricingPlan[]
+  blocks     CapacityBlock[]
+  bookings   Booking[]
+  sessions   ParkingSession[]
+
+  @@map("vehicle_types")
+}
+
+/// Parking place categories (mall, office, ...).
+model Category {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @unique
+  icon      String?
+  sortOrder Int      @default(0) @map("sort_order")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  locations ParkingLocation[]
+
+  @@map("categories")
+}
+
+/// Refund templates. `rules` is `[{ hoursBefore, refundPct }]`, sorted by hoursBefore descending,
+/// always containing a hoursBefore = 0 rule. Exactly one policy is the default.
+model CancellationPolicy {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @unique
+  description String?
+  rules       Json
+  isDefault   Boolean  @default(false) @map("is_default")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  locations ParkingLocation[]
+
+  @@map("cancellation_policies")
+}
+
+/// Single-row table (id = 1) of platform-wide settings.
+model PlatformSettings {
+  id                   Int      @id @default(1)
+  defaultCommissionPct Decimal  @default(10) @map("default_commission_pct") @db.Decimal(5, 2)
+  holdMinutes          Int      @default(10) @map("hold_minutes")
+  entryGraceMinutes    Int      @default(15) @map("entry_grace_minutes")
+  fewLeftThreshold     Int      @default(3) @map("few_left_threshold")
+  exitGraceMinutes     Int      @default(15) @map("exit_grace_minutes")
+  updatedAt            DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  updatedById          String?  @map("updated_by_id") @db.Uuid
+
+  @@map("platform_settings")
+}
+
+// ---------- Vehicles (M3) ----------
+
+/// A customer's vehicle. Soft-deleted (deleted_at) so booking history keeps working.
+/// Unique (user_id, plate_number) among non-deleted rows: partial index in the migration.
+model Vehicle {
+  id            String    @id @default(uuid()) @db.Uuid
+  userId        String    @map("user_id") @db.Uuid
+  vehicleTypeId String    @map("vehicle_type_id") @db.Uuid
+  /// Upper case, letters and digits only (e.g. "TN09AB1234").
+  plateNumber   String    @map("plate_number")
+  /// Random, opaque, printed on the sticker. Carries no personal data; can be rotated.
+  qrToken       String    @unique @map("qr_token")
+  photoUrl      String?   @map("photo_url")
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(3)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vehicleType VehicleType      @relation(fields: [vehicleTypeId], references: [id], onDelete: Restrict)
+  bookings    Booking[]
+  sessions    ParkingSession[]
+
+  @@index([userId])
+  @@index([plateNumber])
+  @@map("vehicles")
+}
+
+// ---------- Owners + KYC (M4) ----------
+
+enum KycStatus {
+  NOT_SUBMITTED
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum KycDocType {
+  PAN
+  AADHAAR
+  GST_CERTIFICATE
+  LAND_PROOF
+  OTHER
+}
+
+model Owner {
+  id                 String    @id @default(uuid()) @db.Uuid
+  userId             String    @unique @map("user_id") @db.Uuid
+  businessName       String    @map("business_name")
+  phone              String
+  address            String
+  panNumber          String?   @map("pan_number")
+  gstin              String?
+  bankAccountName    String?   @map("bank_account_name")
+  bankAccountNumber  String?   @map("bank_account_number")
+  bankIfsc           String?   @map("bank_ifsc")
+  upiId              String?   @map("upi_id")
+  /// Razorpay Route linked account id (set when Route is enabled).
+  bankAccountRef     String?   @map("bank_account_ref")
+  kycStatus          KycStatus @default(NOT_SUBMITTED) @map("kyc_status")
+  kycRejectionReason String?   @map("kyc_rejection_reason")
+  kycSubmittedAt     DateTime? @map("kyc_submitted_at") @db.Timestamptz(3)
+  kycReviewedAt      DateTime? @map("kyc_reviewed_at") @db.Timestamptz(3)
+  /// Null → platform default from platform_settings.
+  commissionPct      Decimal?  @map("commission_pct") @db.Decimal(5, 2)
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  documents OwnerKycDocument[]
+  locations ParkingLocation[]
+  payouts   Payout[]
+
+  @@index([kycStatus])
+  @@map("owners")
+}
+
+model OwnerKycDocument {
+  id          String     @id @default(uuid()) @db.Uuid
+  ownerId     String     @map("owner_id") @db.Uuid
+  docType     KycDocType @map("doc_type")
+  /// Key in the PRIVATE storage area; only admins can download.
+  storageKey  String     @map("storage_key")
+  fileName    String     @map("file_name")
+  contentType String     @map("content_type")
+  sizeBytes   Int        @map("size_bytes")
+  uploadedAt  DateTime   @default(now()) @map("uploaded_at") @db.Timestamptz(3)
+
+  owner Owner @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId])
+  @@map("owner_kyc_documents")
+}
+
+// ---------- Locations, capacity, pricing (M5) ----------
+
+enum LocationStatus {
+  DRAFT
+  PENDING
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
+enum PlanType {
+  HOURLY
+  DAILY
+  WEEKLY
+  MONTHLY
+  YEARLY
+  EVENT
+}
+
+/// Geo search uses an expression GIST index on (lng, lat) and trigram indexes on name/address (raw SQL in the migration).
+model ParkingLocation {
+  id                   String         @id @default(uuid()) @db.Uuid
+  ownerId              String         @map("owner_id") @db.Uuid
+  categoryId           String         @map("category_id") @db.Uuid
+  cancellationPolicyId String?        @map("cancellation_policy_id") @db.Uuid
+  name                 String
+  slug                 String         @unique
+  description          String?
+  address              String
+  city                 String
+  state                String?
+  pincode              String?
+  lat                  Float
+  lng                  Float
+  is24x7               Boolean        @default(false) @map("is_24x7")
+  /// 7 entries, Monday first: { open: "08:00", close: "22:00", closed: false }
+  openingHours         Json?          @map("opening_hours")
+  amenities            String[]       @default([])
+  maxAdvanceDays       Int            @default(30) @map("max_advance_days")
+  status               LocationStatus @default(DRAFT)
+  rejectionReason      String?        @map("rejection_reason")
+  isEvent              Boolean        @default(false) @map("is_event")
+  eventName            String?        @map("event_name")
+  eventStartAt         DateTime?      @map("event_start_at") @db.Timestamptz(3)
+  eventEndAt           DateTime?      @map("event_end_at") @db.Timestamptz(3)
+  submittedAt          DateTime?      @map("submitted_at") @db.Timestamptz(3)
+  approvedAt           DateTime?      @map("approved_at") @db.Timestamptz(3)
+  createdAt            DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt            DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  owner              Owner               @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  category           Category            @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  cancellationPolicy CancellationPolicy? @relation(fields: [cancellationPolicyId], references: [id], onDelete: SetNull)
+  photos             LocationPhoto[]
+  capacities         LocationCapacity[]
+  prices             PricingPlan[]
+  blocks             CapacityBlock[]
+  bookings           Booking[]
+  sessions           ParkingSession[]
+
+  @@index([ownerId])
+  @@index([status, city])
+  @@map("parking_locations")
+}
+
+model LocationPhoto {
+  id         String   @id @default(uuid()) @db.Uuid
+  locationId String   @map("location_id") @db.Uuid
+  storageKey String   @map("storage_key")
+  url        String
+  sortOrder  Int      @default(0) @map("sort_order")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  location ParkingLocation @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@index([locationId])
+  @@map("location_photos")
+}
+
+/// Per vehicle type: physical slots, how many are bookable online, and the overstay rate.
+model LocationCapacity {
+  id                   String @id @default(uuid()) @db.Uuid
+  locationId           String @map("location_id") @db.Uuid
+  vehicleTypeId        String @map("vehicle_type_id") @db.Uuid
+  totalSlots           Int    @map("total_slots")
+  onlineSlots          Int    @map("online_slots")
+  overstayPerHourPaise Int    @default(0) @map("overstay_per_hour_paise")
+
+  location    ParkingLocation @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  vehicleType VehicleType     @relation(fields: [vehicleTypeId], references: [id], onDelete: Restrict)
+
+  @@unique([locationId, vehicleTypeId])
+  @@map("location_capacity")
+}
+
+model PricingPlan {
+  id            String   @id @default(uuid()) @db.Uuid
+  locationId    String   @map("location_id") @db.Uuid
+  vehicleTypeId String   @map("vehicle_type_id") @db.Uuid
+  planType      PlanType @map("plan_type")
+  /// Price per unit (per hour, per day, ... or the flat event price), in paise.
+  pricePaise    Int      @map("price_paise")
+  isActive      Boolean  @default(true) @map("is_active")
+
+  location    ParkingLocation @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  vehicleType VehicleType     @relation(fields: [vehicleTypeId], references: [id], onDelete: Restrict)
+
+  @@unique([locationId, vehicleTypeId, planType])
+  @@map("pricing_plans")
+}
+
+/// Slots taken out of online sale for a period. slots = online_slots closes the period.
+model CapacityBlock {
+  id            String   @id @default(uuid()) @db.Uuid
+  locationId    String   @map("location_id") @db.Uuid
+  vehicleTypeId String   @map("vehicle_type_id") @db.Uuid
+  startAt       DateTime @map("start_at") @db.Timestamptz(3)
+  endAt         DateTime @map("end_at") @db.Timestamptz(3)
+  slots         Int
+  reason        String?
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  location    ParkingLocation @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  vehicleType VehicleType     @relation(fields: [vehicleTypeId], references: [id], onDelete: Restrict)
+
+  @@index([locationId, vehicleTypeId, startAt, endAt])
+  @@map("capacity_blocks")
+}
+
+// ---------- Bookings (M7) ----------
+
+enum BookingStatus {
+  PENDING_PAYMENT
+  CONFIRMED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+  EXPIRED
+}
+
+model Booking {
+  id                String        @id @default(uuid()) @db.Uuid
+  /// Short human code shown on passes, e.g. "QP7F3K9A".
+  code              String        @unique
+  userId            String        @map("user_id") @db.Uuid
+  vehicleId         String        @map("vehicle_id") @db.Uuid
+  locationId        String        @map("location_id") @db.Uuid
+  vehicleTypeId     String        @map("vehicle_type_id") @db.Uuid
+  planType          PlanType      @map("plan_type")
+  quantity          Int           @default(1)
+  startAt           DateTime      @map("start_at") @db.Timestamptz(3)
+  endAt             DateTime      @map("end_at") @db.Timestamptz(3)
+  status            BookingStatus @default(PENDING_PAYMENT)
+  amountPaise       Int           @map("amount_paise")
+  commissionPaise   Int           @map("commission_paise")
+  holdExpiresAt     DateTime?     @map("hold_expires_at") @db.Timestamptz(3)
+  idempotencyKey    String        @map("idempotency_key")
+  extendedFromId    String?       @map("extended_from_id") @db.Uuid
+  /// Refund rules copied from the place's policy when booked.
+  cancellationRules Json          @map("cancellation_rules")
+  cancelledAt       DateTime?     @map("cancelled_at") @db.Timestamptz(3)
+  cancelReason      String?       @map("cancel_reason")
+  confirmedAt       DateTime?     @map("confirmed_at") @db.Timestamptz(3)
+  reminderSentAt    DateTime?     @map("reminder_sent_at") @db.Timestamptz(3)
+  expiryNoticeAt    DateTime?     @map("expiry_notice_at") @db.Timestamptz(3)
+  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user         User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+  vehicle      Vehicle          @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  location     ParkingLocation  @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  vehicleType  VehicleType      @relation(fields: [vehicleTypeId], references: [id], onDelete: Restrict)
+  extendedFrom Booking?         @relation("BookingExtension", fields: [extendedFromId], references: [id], onDelete: SetNull)
+  extensions   Booking[]        @relation("BookingExtension")
+  payments     Payment[]
+  refunds      Refund[]
+  sessions     ParkingSession[]
+  disputes     Dispute[]
+
+  @@unique([userId, idempotencyKey])
+  @@index([locationId, vehicleTypeId, startAt, endAt])
+  @@index([userId, status])
+  @@index([status, holdExpiresAt])
+  @@map("bookings")
+}
+
+// ---------- Access (M10) ----------
+
+enum PaymentMethod {
+  CASH
+  UPI
+  RAZORPAY
+}
+
+model ParkingSession {
+  id                  String         @id @default(uuid()) @db.Uuid
+  locationId          String         @map("location_id") @db.Uuid
+  bookingId           String?        @map("booking_id") @db.Uuid
+  vehicleId           String?        @map("vehicle_id") @db.Uuid
+  vehicleTypeId       String         @map("vehicle_type_id") @db.Uuid
+  plateNumber         String         @map("plate_number")
+  isWalkIn            Boolean        @default(false) @map("is_walk_in")
+  entryAt             DateTime       @default(now()) @map("entry_at") @db.Timestamptz(3)
+  exitAt              DateTime?      @map("exit_at") @db.Timestamptz(3)
+  overstayMinutes     Int            @default(0) @map("overstay_minutes")
+  overstayAmountPaise Int            @default(0) @map("overstay_amount_paise")
+  walkInAmountPaise   Int            @default(0) @map("walk_in_amount_paise")
+  paymentMethod       PaymentMethod? @map("payment_method")
+  enteredById         String         @map("entered_by_id") @db.Uuid
+  exitedById          String?        @map("exited_by_id") @db.Uuid
+
+  location    ParkingLocation @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  booking     Booking?        @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  vehicle     Vehicle?        @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  vehicleType VehicleType     @relation(fields: [vehicleTypeId], references: [id], onDelete: Restrict)
+
+  @@index([locationId, exitAt])
+  @@index([bookingId])
+  @@map("parking_sessions")
+}
+
+// ---------- Payments, refunds, payouts (M8) ----------
+
+enum PaymentStatus {
+  CREATED
+  PAID
+  FAILED
+}
+
+enum PaymentPurpose {
+  BOOKING
+  EXTENSION
+}
+
+model Payment {
+  id                String         @id @default(uuid()) @db.Uuid
+  bookingId         String         @map("booking_id") @db.Uuid
+  purpose           PaymentPurpose @default(BOOKING)
+  /// "mock" or "razorpay"
+  provider          String
+  providerOrderId   String         @unique @map("provider_order_id")
+  providerPaymentId String?        @unique @map("provider_payment_id")
+  amountPaise       Int            @map("amount_paise")
+  status            PaymentStatus  @default(CREATED)
+  paidAt            DateTime?      @map("paid_at") @db.Timestamptz(3)
+  createdAt         DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  booking Booking  @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  refunds Refund[]
+
+  @@index([bookingId])
+  @@map("payments")
+}
+
+model WebhookEvent {
+  id          String    @id @default(uuid()) @db.Uuid
+  provider    String
+  eventId     String    @map("event_id")
+  payload     Json
+  processedAt DateTime? @map("processed_at") @db.Timestamptz(3)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@unique([provider, eventId])
+  @@map("webhook_events")
+}
+
+enum RefundStatus {
+  PENDING
+  PROCESSED
+  FAILED
+}
+
+model Refund {
+  id               String       @id @default(uuid()) @db.Uuid
+  paymentId        String       @map("payment_id") @db.Uuid
+  bookingId        String       @map("booking_id") @db.Uuid
+  amountPaise      Int          @map("amount_paise")
+  status           RefundStatus @default(PENDING)
+  providerRefundId String?      @map("provider_refund_id")
+  reason           String
+  createdById      String?      @map("created_by_id") @db.Uuid
+  /// Provider calls made so far; FAILED refunds are retried by the scheduler up to REFUND_MAX_ATTEMPTS.
+  attempts         Int          @default(1)
+  lastError        String?      @map("last_error")
+  lastAttemptAt    DateTime?    @map("last_attempt_at") @db.Timestamptz(3)
+  createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+
+  @@index([bookingId])
+  @@index([status])
+  @@map("refunds")
+}
+
+enum PayoutStatus {
+  PENDING
+  PAID
+}
+
+model Payout {
+  id              String       @id @default(uuid()) @db.Uuid
+  ownerId         String       @map("owner_id") @db.Uuid
+  periodFrom      DateTime     @map("period_from") @db.Timestamptz(3)
+  periodTo        DateTime     @map("period_to") @db.Timestamptz(3)
+  grossPaise      Int          @map("gross_paise")
+  commissionPaise Int          @map("commission_paise")
+  refundPaise     Int          @default(0) @map("refund_paise")
+  netPaise        Int          @map("net_paise")
+  status          PayoutStatus @default(PENDING)
+  reference       String?
+  paidAt          DateTime?    @map("paid_at") @db.Timestamptz(3)
+  createdById     String       @map("created_by_id") @db.Uuid
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  owner Owner @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+
+  @@index([ownerId])
+  @@map("payouts")
+}
+
+// ---------- Admin ops (M12) ----------
+
+enum DisputeStatus {
+  OPEN
+  RESOLVED
+  REJECTED
+}
+
+model Dispute {
+  id          String        @id @default(uuid()) @db.Uuid
+  bookingId   String        @map("booking_id") @db.Uuid
+  raisedById  String        @map("raised_by_id") @db.Uuid
+  reason      String
+  status      DisputeStatus @default(OPEN)
+  resolution  String?
+  refundPaise Int           @default(0) @map("refund_paise")
+  adminId     String?       @map("admin_id") @db.Uuid
+  resolvedAt  DateTime?     @map("resolved_at") @db.Timestamptz(3)
+  createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+
+  @@index([status])
+  @@map("disputes")
+}
+
+model AuditLog {
+  id        String   @id @default(uuid()) @db.Uuid
+  actorId   String?  @map("actor_id") @db.Uuid
+  action    String
+  entity    String
+  entityId  String?  @map("entity_id")
+  meta      Json?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([entity, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
 }

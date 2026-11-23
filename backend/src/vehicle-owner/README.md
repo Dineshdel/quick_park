@@ -1,16 +1,10 @@
 # vehicle-owner/ — Vehicle Owner (customer)
 
-Everything that **only Vehicle Owners** can do. Routes will be under `/api/v1/vehicles/*` and `/api/v1/bookings/*`, guarded by `@Roles('VEHICLE_OWNER')`.
-Every query must be limited to the user's own vehicles and bookings.
+Everything only customers call, guarded by `@Roles('VEHICLE_OWNER')`. Every query is scoped to the signed-in user (others' records are 404).
 
-| File | What it does |
+| Folder | Routes |
 |---|---|
-| `vehicle-owner.module.ts` | Registers everything in this folder (empty for now) |
+| `vehicles/` | `GET/POST /vehicles`, `GET/PATCH/DELETE /vehicles/:id`, `GET /vehicles/:id/qr`, `POST /vehicles/:id/qr/rotate` |
+| `bookings/` | `POST /bookings` (Idempotency-Key), `GET /bookings?tab=`, `GET /bookings/:id`, `POST …/cancel`, `POST …/extend`, `GET …/pass`, `GET …/pass.pdf`, `POST/GET …/disputes` |
 
-**Coming next (plan M3, M7, M8, M9):**
-- my vehicles and their QR stickers
-- price quote, booking, cancel, extend, rebook
-- payment
-- booking pass (QR, PDF)
-
-Public parking search (no login needed) will live in `shared/`, because every visitor uses it.
+Payments (`POST /payments/order`, mock checkout) live in `shared/payments` because the webhook is shared. Public search and quotes live in `shared/search`.

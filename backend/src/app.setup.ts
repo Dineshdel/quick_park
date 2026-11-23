@@ -22,10 +22,13 @@ export function configureApp(app: NestExpressApplication) {
   });
   app.enableShutdownHooks();
 
-  const doc = SwaggerModule.createDocument(
-    app,
-    new DocumentBuilder().setTitle('Quick Park API').setVersion('1.0').addBearerAuth().build(),
-  );
-  SwaggerModule.setup('api/docs', app, doc, { jsonDocumentUrl: 'api/docs-json' });
+  // API docs reveal every endpoint, so they are off in production unless API_DOCS=true.
+  if (config.get('API_DOCS', { infer: true })) {
+    const doc = SwaggerModule.createDocument(
+      app,
+      new DocumentBuilder().setTitle('Quick Park API').setVersion('1.0').addBearerAuth().build(),
+    );
+    SwaggerModule.setup('api/docs', app, doc, { jsonDocumentUrl: 'api/docs-json' });
+  }
   return app;
 }

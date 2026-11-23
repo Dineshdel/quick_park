@@ -1,6 +1,7 @@
 import { type ArgumentsHost, Catch, type ExceptionFilter, HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { ThrottlerException } from '@nestjs/throttler';
 import { Prisma } from '@prisma/client';
+import * as Sentry from '@sentry/nestjs';
 import { type ApiErrorBody, type ErrorCode } from '@qp/types';
 import { type Response } from 'express';
 import { AppException } from '../app-exception';
@@ -22,7 +23,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost) {
     const res = host.switchToHttp().getResponse<Response>();
     const { status, body } = this.toResponse(exception);
-    if (status >= 500) this.logger.error(exception instanceof Error ? exception.stack : exception);
+    if (status >= 500) {
+      this.logger.error(exception instanceof Error ? exception.stack : exception);
+      Sentry.captureException(exception); // no-op unless SENTRY_DSN is set
+    }
     res.status(status).json(body);
   }
 

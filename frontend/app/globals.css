@@ -3,46 +3,64 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  --radius: 0.75rem;
+  /* Classic palette: deep navy, warm ivory, a touch of gold. */
+  --background: oklch(0.985 0.007 85);
+  --foreground: oklch(0.21 0.035 262);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --success: oklch(0.6 0.15 150);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --card-foreground: oklch(0.21 0.035 262);
+  --primary: oklch(0.27 0.075 262);
+  --primary-foreground: oklch(0.99 0.004 85);
+  --secondary: oklch(0.95 0.014 258);
+  --secondary-foreground: oklch(0.3 0.07 258);
+  --muted: oklch(0.955 0.009 85);
+  --muted-foreground: oklch(0.5 0.025 258);
+  --accent: oklch(0.945 0.016 258);
+  --accent-foreground: oklch(0.28 0.07 258);
+  --gold: oklch(0.78 0.12 80);
+  --gold-deep: oklch(0.62 0.12 70);
+  /* Gold that stays readable on the royal-blue panels. */
+  --gold-light: oklch(0.9 0.1 88);
+  --gold-foreground: oklch(0.26 0.05 70);
+  --destructive: oklch(0.55 0.2 27);
+  --success: oklch(0.55 0.13 155);
+  --border: oklch(0.91 0.012 85);
+  --input: oklch(0.88 0.014 85);
+  --ring: oklch(0.55 0.1 258);
+  /* Navy chrome: site header and admin sidebar. */
+  --chrome: oklch(0.2 0.055 264);
+  --chrome-foreground: oklch(0.93 0.01 258);
+  --chrome-muted: oklch(0.72 0.03 258);
+  --chrome-hover: oklch(0.27 0.06 264);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.205 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.922 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.704 0.191 22.216);
-    --success: oklch(0.7 0.15 150);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.556 0 0);
-  }
+/* Night mode: the .dark class is set from the header toggle (or the device setting when "System" is chosen). */
+:root.dark {
+  --background: oklch(0.19 0.03 258);
+  --foreground: oklch(0.95 0.008 85);
+  --card: oklch(0.235 0.035 258);
+  --card-foreground: oklch(0.95 0.008 85);
+  --primary: oklch(0.78 0.12 80);
+  --primary-foreground: oklch(0.22 0.04 258);
+  --secondary: oklch(0.29 0.04 258);
+  --secondary-foreground: oklch(0.95 0.008 85);
+  --muted: oklch(0.27 0.035 258);
+  --muted-foreground: oklch(0.72 0.02 258);
+  --accent: oklch(0.3 0.045 258);
+  --accent-foreground: oklch(0.95 0.008 85);
+  --gold: oklch(0.8 0.11 82);
+  --gold-deep: oklch(0.66 0.12 72);
+  --gold-light: oklch(0.9 0.1 88);
+  --gold-foreground: oklch(0.22 0.04 258);
+  --destructive: oklch(0.68 0.18 25);
+  --success: oklch(0.72 0.14 155);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 16%);
+  --ring: oklch(0.7 0.1 80);
+  --chrome: oklch(0.15 0.03 258);
+  --chrome-foreground: oklch(0.93 0.01 258);
+  --chrome-muted: oklch(0.68 0.03 258);
+  --chrome-hover: oklch(0.22 0.04 258);
 }
 
 @theme inline {
@@ -61,6 +79,20 @@
   --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
+  --color-gold: var(--gold);
+  --color-gold-foreground: var(--gold-foreground);
+  --color-gold-deep: var(--gold-deep);
+  --color-gold-light: var(--gold-light);
+  --color-chrome: var(--chrome);
+  --color-chrome-foreground: var(--chrome-foreground);
+  --color-chrome-muted: var(--chrome-muted);
+  --color-chrome-hover: var(--chrome-hover);
+  --font-sans:
+    var(--font-body), var(--font-tamil), var(--font-devanagari), ui-sans-serif, system-ui,
+    sans-serif;
+  --font-serif:
+    var(--font-heading), var(--font-tamil), var(--font-devanagari), Georgia, 'Times New Roman',
+    serif;
   --color-destructive: var(--destructive);
   --color-success: var(--success);
   --color-border: var(--border);
@@ -73,6 +105,80 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground antialiased;
+    @apply bg-background font-sans text-foreground antialiased;
+  }
+  /* Classic serif for page titles; UI text stays in the clean sans. */
+  h1 {
+    @apply font-serif;
   }
 }
+
+/* ---------- Premium touches (shared utilities) ---------- */
+@utility bg-gold-gradient {
+  background-image: linear-gradient(
+    135deg,
+    oklch(0.86 0.1 88) 0%,
+    var(--gold) 45%,
+    var(--gold-deep) 100%
+  );
+}
+@utility text-gold-gradient {
+  background-image: linear-gradient(
+    120deg,
+    oklch(0.9 0.08 90) 0%,
+    var(--gold) 50%,
+    var(--gold-deep) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+/* Midnight panel with a soft glow, for the header, hero, banners and sidebars. */
+@utility bg-midnight {
+  background-color: var(--chrome);
+  background-image:
+    radial-gradient(1200px 400px at 15% -10%, oklch(0.4 0.09 262 / 0.55), transparent 60%),
+    radial-gradient(800px 300px at 95% 0%, oklch(0.6 0.1 80 / 0.12), transparent 60%);
+}
+/* Sidebar panel: the same midnight, with the glow at the top. */
+@utility bg-chrome-panel {
+  background-color: var(--chrome);
+  background-image: radial-gradient(
+    500px 300px at 0% 0%,
+    oklch(0.4 0.09 262 / 0.5),
+    transparent 70%
+  );
+}
+/* Thin champagne line used under the header and between sections. */
+@utility hairline-gold {
+  background-image: linear-gradient(
+    90deg,
+    transparent,
+    var(--gold) 20%,
+    var(--gold) 80%,
+    transparent
+  );
+}
+/* Layered, soft shadow that reads as "lifted" rather than "boxed". */
+@utility shadow-premium {
+  box-shadow:
+    0 1px 2px oklch(0.2 0.05 262 / 0.06),
+    0 8px 24px -8px oklch(0.2 0.05 262 / 0.14);
+}
+@utility shadow-premium-lg {
+  box-shadow:
+    0 2px 4px oklch(0.2 0.05 262 / 0.06),
+    0 24px 48px -16px oklch(0.2 0.05 262 / 0.28);
+}
+/* Faint dot grid for hero backgrounds. */
+@utility bg-dots {
+  background-image: radial-gradient(oklch(1 0 0 / 0.07) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+/* Tamil and Devanagari letters join into clusters; extra letter-spacing breaks them apart. */
+html:lang(ta) [class*='tracking-'],
+html:lang(hi) [class*='tracking-'] {
+  letter-spacing: normal;
+}
+

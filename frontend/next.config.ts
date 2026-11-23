@@ -9,6 +9,10 @@ const apiUrl = process.env.API_INTERNAL_URL ?? 'http://localhost:4000';
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // The pnpm monorepo root (stops Next guessing it from unrelated lockfiles higher up the disk).
+  outputFileTracingRoot: path.resolve(__dirname, '..'),
+  // Lets a production build run next to `next dev` without clobbering its .next folder (NEXT_DIST_DIR=.next-build).
+  distDir: process.env.NEXT_DIST_DIR || '.next',
   // Lint runs as its own Turbo task (root eslint.config.mjs).
   eslint: { ignoreDuringBuilds: true },
   transpilePackages: ['@qp/types', '@qp/validation'],

@@ -23,6 +23,8 @@ import { MailModule } from './shared/mail/mail.module';
 import { PrismaModule } from './shared/database/prisma.module';
 import { REDIS, RedisModule, redisOptionsFromUrl } from './shared/redis/redis.module';
 import { ProfileModule } from './shared/profile/profile.module';
+import { MastersModule } from './shared/masters/masters.module';
+import { EnginesModule } from './shared/engines.module';
 
 @Module({
   imports: [
@@ -60,6 +62,8 @@ import { ProfileModule } from './shared/profile/profile.module';
     MailModule,
     AuthModule,
     ProfileModule,
+    MastersModule,
+    EnginesModule,
     // One module per user type
     AdminModule,
     ParkingOwnerModule,

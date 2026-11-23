@@ -1,14 +1,13 @@
 # app/admin/ — Super Admin screens
 
-All pages that **only the Super Admin** sees. URL: `/admin/...`
+URL: `/admin/...` (only SUPER_ADMIN), except `accept-invite/` (public, for invited admins).
 
-| Path | URL | What |
-|---|---|---|
-| `(dashboard)/layout.tsx` | — | Lets only SUPER_ADMIN in; everyone else is redirected |
-| `(dashboard)/page.tsx` | `/admin` | Admin home (for now: the invite form) |
-| `(dashboard)/_components/` | — | Components used only by admin pages |
-| `accept-invite/` | `/admin/accept-invite?token=…` | **Public** page: an invited admin sets their name and password |
-
-`(dashboard)` is a Next.js route group: it groups the protected pages without adding to the URL. Folders starting with `_` are never pages.
-
-**Coming next:** approvals (owners and places), masters, users, bookings, refunds, disputes, reports.
+| Path | What |
+|---|---|
+| `(dashboard)/page.tsx` | Overview KPIs, invite admin |
+| `approvals/` | Owner KYC (view documents) and place approvals |
+| `places/`, `users/` | Suspend / reinstate places and users |
+| `bookings/`, `payments/` | Search bookings, refund; payment and refund history |
+| `disputes/`, `payouts/` | Resolve customer issues; create payouts and record transfers |
+| `reports/`, `audit/` | Revenue by month / city / category; audit log |
+| `vehicle-types/`, `categories/`, `cancellation-policies/`, `settings/` | Master data (M2) |

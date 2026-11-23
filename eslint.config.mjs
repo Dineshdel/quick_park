@@ -3,7 +3,7 @@ import reactHooks from 'eslint-plugin-react-hooks';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['**/dist/**', '**/.next/**', '**/node_modules/**', '**/coverage/**', 'prisma/migrations/**', '**/*.config.*', '**/next-env.d.ts'] },
+  { ignores: ['**/dist/**', '**/.next/**', '**/.next-build/**', '**/node_modules/**', '**/coverage/**', 'prisma/migrations/**', '**/*.config.*', '**/next-env.d.ts'] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {

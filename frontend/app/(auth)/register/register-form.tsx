@@ -22,6 +22,7 @@ export function RegisterForm() {
   const params = useSearchParams();
   const initialRole: SelfServiceRole = params.get('role') === 'PARKING_OWNER' ? 'PARKING_OWNER' : 'VEHICLE_OWNER';
   const [sentTo, setSentTo] = useState<string | null>(null);
+  const [created, setCreated] = useState(false);
   const form = useForm<RegisterInput>({
     resolver: zodResolver(registerSchema),
     defaultValues: { name: '', email: '', password: '', role: initialRole },
@@ -30,12 +31,24 @@ export function RegisterForm() {
 
   const onSubmit = form.handleSubmit(async (values) => {
     try {
-      await api('/auth/register', { body: values });
-      setSentTo(values.email);
+      const r = await api<{ verificationRequired?: boolean }>('/auth/register', { body: values });
+      if (r.verificationRequired === false) setCreated(true);
+      else setSentTo(values.email);
     } catch (e) {
       applyApiError(e, form.setError);
     }
   });
+
+  if (created) {
+    return (
+      <Alert variant="success">
+        Account created.{' '}
+        <Link href="/login" className="font-medium underline">
+          Sign in now
+        </Link>
+      </Alert>
+    );
+  }
 
   if (sentTo) {
     return (

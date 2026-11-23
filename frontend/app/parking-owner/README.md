@@ -1,12 +1,13 @@
 # app/parking-owner/ — Parking Owner screens
 
-All pages that **only Parking Owners** see. URL: `/parking-owner/...`
+URL: `/parking-owner/...` (only PARKING_OWNER).
 
-| Path | URL | What |
-|---|---|---|
-| `layout.tsx` | — | Lets only PARKING_OWNER in |
-| `page.tsx` | `/parking-owner` | Owner home |
-
-Put components used only here in `_components/`.
-
-**Coming next:** onboarding (KYC and bank), places, slots and pricing, availability calendar, bookings, scanner, earnings and payouts.
+| Path | What |
+|---|---|
+| `page.tsx` | Dashboard: inside now, today, revenue, 30-day chart, occupancy per place |
+| `onboarding/` | Business profile, bank/UPI, KYC documents, submit for verification |
+| `locations/`, `locations/new/`, `locations/[id]/` | Places: details + map pin, slots & prices, blocked times, photos, calendar, submit |
+| `scanner/` | Gate: camera / USB scanner / typed plate, entry & exit, collect overstay or walk-in charge, walk-ins, who's inside, live counts |
+| `bookings/` | Bookings at your places (customer name, vehicle, booking) |
+| `earnings/` | Revenue, refunds, commission, your share, gate cash, payouts |
+| `_components/` | Place form, owner hooks |

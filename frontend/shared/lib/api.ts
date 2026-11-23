@@ -136,6 +136,41 @@ export async function api<T>(path: string, opts: RequestOptions = {}, retry = tr
   return (res.status === 204 ? undefined : await res.json()) as T;
 }
 
+/** Authenticated download (PDF pass, KYC documents): returns an object URL the caller should revoke. */
+export async function apiBlob(path: string, retry = true): Promise<string> {
+  const current = session.get();
+  const headers: Record<string, string> = {};
+  if (current.status === 'authenticated') headers.Authorization = `Bearer ${current.accessToken}`;
+  const res = await fetch(`${API_BASE}${path}`, { headers, credentials: 'same-origin' });
+  if (res.status === 401 && retry && current.status === 'authenticated' && (await refreshSession())) return apiBlob(path, false);
+  if (!res.ok) throw await toApiError(res);
+  return URL.createObjectURL(await res.blob());
+}
+
+/** Multipart upload with the bearer token. */
+export async function apiUpload<T>(path: string, form: FormData, retry = true): Promise<T> {
+  const current = session.get();
+  const headers: Record<string, string> = {};
+  if (current.status === 'authenticated') headers.Authorization = `Bearer ${current.accessToken}`;
+  const res = await fetch(`${API_BASE}${path}`, { method: 'POST', headers, body: form, credentials: 'same-origin' });
+  if (res.status === 401 && retry && current.status === 'authenticated' && (await refreshSession())) return apiUpload<T>(path, form, false);
+  if (!res.ok) throw await toApiError(res);
+  return (await res.json()) as T;
+}
+
+export async function openBlob(path: string, download?: string) {
+  const url = await apiBlob(path);
+  const a = document.createElement('a');
+  a.href = url;
+  if (download) a.download = download;
+  else a.target = '_blank';
+  a.rel = 'noopener';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
+export const errorMessage = (e: unknown) => (e instanceof ApiError ? e.message : 'Something went wrong, please try again');
+
 export async function logout() {
   await api('/auth/logout', { method: 'POST' }).catch(() => undefined);
   session.set({ status: 'anonymous' });

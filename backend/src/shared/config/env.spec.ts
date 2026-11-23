@@ -12,7 +12,18 @@ describe('validateEnv', () => {
     expect(env.PORT).toBe(4000);
     expect(env.WEB_ORIGINS).toEqual(['http://a.test', 'http://b.test']);
     expect(env.COOKIE_SECURE).toBe(false);
-    expect(validateEnv({ ...base, NODE_ENV: 'production' }).COOKIE_SECURE).toBe(true);
+    const razorpay = { PAYMENTS_DRIVER: 'razorpay', RAZORPAY_KEY_ID: 'k', RAZORPAY_KEY_SECRET: 's', RAZORPAY_WEBHOOK_SECRET: 'w' };
+    const prod = { ...base, ...razorpay, NODE_ENV: 'production', MAIL_TRANSPORT: 'smtp', SMTP_URL: 'smtp://mail:25' };
+    expect(validateEnv(prod)).toMatchObject({ COOKIE_SECURE: true, API_DOCS: false, REQUIRE_EMAIL_VERIFICATION: true });
+    expect(validateEnv({ ...prod, API_DOCS: 'true' }).API_DOCS).toBe(true);
+    expect(() => validateEnv({ ...prod, MAIL_TRANSPORT: 'log' })).toThrow(/real emails/);
+    expect(() => validateEnv({ ...prod, REQUIRE_EMAIL_VERIFICATION: 'false' })).toThrow(/REQUIRE_EMAIL_VERIFICATION/);
+  });
+
+  it('refuses mock payments in production and incomplete payment / storage config', () => {
+    expect(() => validateEnv({ ...base, NODE_ENV: 'production' })).toThrow(/mock payments/);
+    expect(() => validateEnv({ ...base, PAYMENTS_DRIVER: 'razorpay' })).toThrow(/RAZORPAY_KEY_ID/);
+    expect(() => validateEnv({ ...base, STORAGE_DRIVER: 's3' })).toThrow(/S3_PUBLIC_BUCKET/);
   });
 
   it('refuses to boot with a short JWT secret or missing SMTP_URL for smtp transport', () => {

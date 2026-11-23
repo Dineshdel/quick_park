@@ -36,6 +36,10 @@ export class AuthService {
     private readonly config: ConfigService<Env, true>,
   ) {}
 
+  private get verificationRequired() {
+    return this.config.get('REQUIRE_EMAIL_VERIFICATION', { infer: true });
+  }
+
   private link(path: string, token?: string) {
     return webLink(this.config, path, token);
   }
@@ -47,6 +51,10 @@ export class AuthService {
     if (exists) throw Errors.conflict('EMAIL_TAKEN', 'An account with this email already exists');
 
     const passwordHash = await this.passwords.hash(input.password);
+    if (!this.verificationRequired) {
+      await this.prisma.user.create({ data: { name: input.name, email: input.email, passwordHash, role: input.role } });
+      return { message: 'Account created, you can now sign in', verificationRequired: false };
+    }
     const { user, token } = await this.prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
         data: { name: input.name, email: input.email, passwordHash, role: input.role },
@@ -55,7 +63,7 @@ export class AuthService {
       return { user, token };
     });
     await this.mail.send(user.email, 'verifyEmail', { name: user.name, link: this.link('/verify-email', token) });
-    return { message: 'Check your email to verify your account' };
+    return { message: 'Check your email to verify your account', verificationRequired: true };
   }
 
   async verifyEmail(token: string) {
@@ -81,7 +89,7 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({ where: { email: input.email } });
     const ok = await this.passwords.verify(user?.passwordHash, input.password);
     if (!user || !ok) throw invalidCredentials();
-    if (!user.emailVerifiedAt) {
+    if (!user.emailVerifiedAt && this.verificationRequired) {
       throw new AppException(HttpStatus.FORBIDDEN, 'EMAIL_NOT_VERIFIED', 'Verify your email before signing in');
     }
     assertActive(user);

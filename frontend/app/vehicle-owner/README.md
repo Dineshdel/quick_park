@@ -1,12 +1,12 @@
 # app/vehicle-owner/ — Vehicle Owner screens
 
-All pages that **only Vehicle Owners** see. URL: `/vehicle-owner/...`
+URL: `/vehicle-owner/...` (only VEHICLE_OWNER). Public search lives at `/search` and `/p/[slug]`.
 
-| Path | URL | What |
-|---|---|---|
-| `layout.tsx` | — | Lets only VEHICLE_OWNER in |
-| `page.tsx` | `/vehicle-owner` | Customer home |
-
-Put components used only here in `_components/`.
-
-**Coming next:** my vehicles and QR stickers, booking flow and payment, my bookings, booking pass.
+| Path | What |
+|---|---|
+| `page.tsx` | Home: vehicles, find parking, bookings |
+| `vehicles/`, `vehicles/[id]/sticker/` | Vehicles CRUD, printable QR sticker |
+| `book/[locationId]/` | Pick vehicle, plan, start, quantity → live quote → hold slot |
+| `bookings/` | Upcoming / parked now / past |
+| `bookings/[id]/` | Pay (checkout), pass QR + PDF, cancel with refund estimate, extend, book again, report a problem |
+| `_components/` | `checkout.tsx` (mock or Razorpay), vehicle hooks/icon |

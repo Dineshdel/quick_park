@@ -1,6 +1,6 @@
 # Quick Park — Implementation Plan
 
-Source: *Parking App – System Design* (Nov 22, 2026). Status: **Approved (Nov 22, 2026). M0–M1 done.**
+Source: *Parking App – System Design* (Nov 22, 2026). Status: **Approved (Nov 22, 2026). M0–M13 built (see progress). Open questions in §10 were answered with assumed defaults (§10a), each changeable.**
 Items marked **[PROPOSAL]** are my additions or interpretations that the PDF leaves open. Section 10 lists the questions that must be answered before the affected modules start.
 
 ## Progress
@@ -9,9 +9,18 @@ Items marked **[PROPOSAL]** are my additions or interpretations that the PDF lea
 |---|---|---|
 | M0 Foundation | ✅ Done | lint, typecheck, build for all packages; `/health`; CI workflow |
 | M1 Auth + Users | ✅ Done | 30 API e2e tests (real Postgres+PostGIS + Redis), 11 unit tests (API + web), manual full-stack run through the web proxy |
-| M2 Masters | ⏳ Next (no blocking questions) | |
-| M3 Vehicles | ⏳ (no blocking questions) | |
-| M4–M13 | ⛔ Blocked on §10 answers (see each question's module tag) | |
+| M2 Masters | ✅ Done | 37 API e2e tests (401/403 for every admin route, validation, duplicates, single-default policy, settings), seed data in migration, admin screens build |
+| M3 Vehicles | ✅ Done (photo upload deferred to the files/S3 module) | 24 API e2e tests: 401/403, another user's vehicle is 404 on every route, plate normalisation + per-user uniqueness, soft delete + re-add, QR + rotate, 20-vehicle limit |
+| M4 Owners + KYC | ✅ Done | platform e2e: profile validation, private uploads with file-signature checks, submit rules, admin approve/reject + audit, document download admin-only |
+| M5 Locations, capacity, pricing | ✅ Done | platform e2e: draft → submit (needs approved KYC, slots, prices) → admin approve; other owner gets 404; public photos served |
+| M6 Search + availability | ✅ Done | platform e2e: PostGIS near/far, text/city search, quote rules, calendar; sweep-line availability |
+| M7 Bookings | ✅ Done | platform e2e: idempotency, hold, cancel + policy refund, extension, **20 parallel requests on 2 slots → exactly 2 bookings** |
+| M8 Payments | ✅ Done (mock driver + Razorpay adapter; Route transfers not wired, payouts are manual) | platform e2e: order → mock webhook → CONFIRMED, replay is a no-op, late payment auto-refunded; Razorpay HMAC unit-tested |
+| M9 Pass + notifications | ✅ Done | signed QR pass (JSON + PDF), confirmation email with QR, reminders, pass-expiring, owner new-booking, receipts, KYC/place decisions |
+| M10 Access + realtime | ✅ Done | platform e2e: forged pass, other owner, entry/second entry, overstay charge + payment method, sticker → walk-in, typed-plate exit; socket.io gateway |
+| M11 Owner dashboard + earnings | ✅ Done | earnings reconcile with payments/refunds; dashboard 30-day series; no customer email exposed |
+| M12 Admin ops + reports | ✅ Done | approvals, users/suspend (immediate), bookings/refunds, payments, disputes, payouts (no overlaps), reports by city/category/month match owner earnings, audit log |
+| M13 Hardening | ✅ Done | Production config guards (mock payments, log-only email and unverified sign-up refused in production; API docs off), rate limits incl. scan, Sentry (API, Next.js server, browser; off without a DSN), Playwright smoke suite (desktop + phone), friendly 404/error pages, SEO (server-rendered place pages, sitemap, robots, structured data). Go-live fixes: refund locking + automatic retries, wrong-amount payments refunded, suspension cancels and refunds bookings, overstays and extra walk-ins reduce near-term availability, paid extensions never treated as no-shows, unpaid-hold limit (3). **Still manual:** formal accessibility audit, real-device camera test at a gate, Razorpay Route payouts |
 
 ### Implementation notes (technical deviations from §2–§7, no business-logic impact)
 - **Auth guards without Passport.** `JwtService` plus two small global guards do the job; `@nestjs/passport` would add nothing here.
@@ -21,6 +30,9 @@ Items marked **[PROPOSAL]** are my additions or interpretations that the PDF lea
 - **Dev email** goes to the API log (`MAIL_TRANSPORT=log`) by default. Mailpit via `MAIL_TRANSPORT=smtp` is still supported.
 - **Pre-account-takeover guard:** if Google sign-in matches an account whose email was never verified, that account's password is removed and its sessions are revoked.
 - **E2E safety:** tests apply migrations non-destructively, truncate tables, and refuse any database whose name doesn't end in `_test`.
+- **Email verification switch:** `REQUIRE_EMAIL_VERIFICATION=false` lets users sign in without verifying (local development). It defaults to `true`, and e2e tests always run with `true`.
+- **Masters (M2):** master rows are hard-deleted only while unreferenced (a foreign-key violation returns `409 IN_USE`); otherwise admins deactivate them. Exactly one cancellation policy is the default (partial unique index); the default can only be moved, never unset, deactivated or deleted. Settings are a single row (`id = 1`, CHECK constraint); commission is `numeric(5,2)`. Seed data is inserted by the migration with `ON CONFLICT DO NOTHING`.
+- **Vehicles (M3):** plates are stored upper case without spaces/dots/dashes and validated loosely (4–12 letters/digits) so BH-series and temporary plates work. The sticker QR encodes `qpv:<qrToken>` (128-bit random, no personal data); `POST /vehicles/:id/qr/rotate` replaces a lost sticker. The QR SVG is generated server-side (`qrcode`) so emails/PDFs can reuse it. Other users' vehicles return 404, not 403, so ids can't be probed. Max 20 live vehicles per user. Photo upload waits for the S3 files module (needs MinIO/S3).
 - **Pinned versions:** NestJS 11, Next.js 15.5, Prisma 6.19, TypeScript 5.9, zod 4.1. The newer majors (Nest 12, TS 7, Prisma 7/8) are skipped for stability on Node 20.
 
 ---
@@ -128,7 +140,7 @@ quick_park/
 - **Errors:** one global exception filter returns `{ error: { code, message, details? } }` with stable error codes such as `SLOT_UNAVAILABLE` and `BOOKING_NOT_ACTIVE`.
 - **Prisma + PostGIS:** Prisma has no native geography support, so `geo` is declared `Unsupported("geography(Point,4326)")`. Geo reads and writes and the `tstzrange` / GIST pieces go through `$queryRaw`, written in raw-SQL migrations.
 - **Config:** `@nestjs/config` with a zod-validated env schema. The app refuses to boot if config is missing.
-- **Logging:** pino (nestjs-pino) with a request id. Sentry is added in the hardening phase.
+- **Logging:** pino (nestjs-pino) with a request id. Errors (5xx) also go to Sentry when SENTRY_DSN is set.
 
 ---
 
@@ -172,11 +184,12 @@ Role folders hold the **endpoints only that role calls**. Business engines that 
 
 | Folder | Contains (✅ built, ⏳ planned) |
 |---|---|
-| `admin/` | ✅ invites, accept-invite, seed CLI · ⏳ approvals (KYC, places), masters, users/suspend, bookings, payments, refunds, disputes, reports |
+| `admin/` | ✅ invites, accept-invite, seed CLI, masters (vehicle types, categories, cancellation policies, settings) · ⏳ approvals (KYC, places), masters, users/suspend, bookings, payments, refunds, disputes, reports |
 | `parking-owner/` | ⏳ owner profile + KYC + bank, places (CRUD, photos, events, submit), capacity + blocks, pricing, owner bookings + occupancy, access (scan, walk-in, exit, overstay), earnings + payouts |
-| `vehicle-owner/` | ⏳ vehicles + QR sticker, bookings (quote, create, cancel, extend, list), booking pass, payment order |
+| `vehicle-owner/` | ✅ vehicles + QR sticker (`vehicles/`) · ⏳ bookings (quote, create, cancel, extend, list), booking pass, payment order |
 | `shared/auth` | ✅ register/login/Google/verify/reset/refresh/logout/choose-role, guards, sessions |
 | `shared/profile` | ✅ `/me`, password change |
+| `shared/masters` | ✅ public `GET /vehicle-types`, `GET /categories`; `MastersService` (active lists, default policy, settings) for other modules |
 | `shared/http`, `config`, `database`, `redis`, `mail`, `health` | ✅ errors, validation, rate limits, env, Prisma, Redis, email queue, health |
 | `shared/` (planned) | ⏳ `search` (public geo search + calendar), `availability` (sweep engine + row-lock booking insert), `pricing` (quote), `payments` (Razorpay client + webhook), `files` (S3 presign), `realtime` (socket.io), `scheduler` (hold expiry, reminders, event archive) |
 
@@ -336,6 +349,34 @@ Each module is finished, tested (§9) and summarised for you before the next one
 25. **Languages:** English only for v1? Tamil/Hindi are listed as a later upgrade.
 
 ---
+
+## 10a. Assumed defaults (used because §10 was not answered — each is a small change if you decide otherwise)
+
+| Q | Assumed |
+|---|---|
+| 1 Revenue model | Commission per online booking, default 10 % (admin setting, per-owner override). Walk-in and overstay cash is the owner's, no commission |
+| 2 Walk-ins | Use offline slots (total − online) first; beyond that they reduce live online availability. Walk-in entry refused when everyone inside = total slots |
+| 3 Roles | One role per account (second email for the other role) |
+| 4 Durations | HOURLY N h (≤ 24), DAILY N × 24 h (≤ 30), WEEKLY N × 7 d (≤ 8), MONTHLY N × 30 d (≤ 12), YEARLY 365 d, EVENT = event window |
+| 5 Overstay / walk-in collection | Collected at the gate; owner records CASH or UPI before the exit is confirmed |
+| 6 Grace | Entry up to 15 min early; overstay starts 15 min after the end (both admin settings), charged per started hour from the end |
+| 7 Passes | Weekly, monthly, yearly and event bookings allow unlimited re-entry until they end; hourly/daily are single entry |
+| 8 Sticker scan | Finds the vehicle's current booking at that place; if none, the scanner offers a walk-in |
+| 9 Gate staff | The owner scans personally (no attendant role) |
+| 10 Opening hours | Hourly bookings must fit one day's opening hours; daily and longer ignore them |
+| 11 Cancellation | Per place, chosen by the owner from admin templates (default "Standard": 100 % ≥ 2 h before, else 0 %). Rules are copied onto each booking. No pro-rata |
+| 12 Extension | A new back-to-back booking for the extra period at the same plan rate, paid separately |
+| 13 Event parking | New `EVENT` plan type: one flat price per vehicle type for the whole event; place archived after the event |
+| 14 Reviews | Deferred |
+| 15 Disputes | Customer raises from a booking; admin resolves or rejects, optionally with a refund; customer emailed |
+| 16 GST | Prices shown inclusive; no GST invoices in v1 |
+| 17 KYC | PAN number + PAN card + Aadhaar required; GST certificate / land proof optional; bank details or UPI required. Drafts allowed before approval; submitting a place needs approval. Changing PAN/GSTIN/bank after approval triggers a new review |
+| 18 Payouts | Manual: admin creates a payout for a period (net = revenue − refunds − commission), then records the transfer reference |
+| 19 Phone | Owner phone required; customer phone optional (unchanged) |
+| 20 Admin login | No Google-domain requirement |
+| 22–23 Environment | Native Postgres + PostGIS + Redis (no Docker). Without third-party keys: mock payments, local-disk file storage, OpenStreetMap (no key) |
+
+**Implementation deviations:** uploads go through the API as multipart (validated by file signature) instead of presigned URLs — same private/public split, works with local disk and S3; maps use Leaflet + OpenStreetMap instead of Google Maps (no key needed, no Places autocomplete); `packages/api-client` (orval) not generated — the web app calls the API with a typed fetch wrapper and shared DTO types; Prisma can't express the raw-SQL indexes, so create migrations with `--create-only` and apply with `migrate deploy`.
 
 ## 11. Proposed deviations from the PDF (please approve or reject)
 - `vehicle_types` becomes a table instead of an enum, because admins can add types.

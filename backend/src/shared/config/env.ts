@@ -28,8 +28,59 @@ export const envSchema = z
     MAIL_TRANSPORT: z.enum(['log', 'smtp']).default('log'),
     SMTP_URL: z.string().optional(),
     MAIL_FROM: z.string().default('Quick Park <no-reply@quickpark.local>'),
+
+    /** false = users can sign in right after registering, no verification email is sent. Turn back on before launch. */
+    REQUIRE_EMAIL_VERIFICATION: bool.default(true),
+
+    /** "local" stores files on disk under STORAGE_DIR (development); "s3" uses the two S3 buckets. */
+    STORAGE_DRIVER: z.enum(['local', 's3']).default('local'),
+    STORAGE_DIR: z.string().default('./storage'),
+    S3_REGION: z.string().optional(),
+    S3_ENDPOINT: z.string().optional(),
+    S3_ACCESS_KEY_ID: z.string().optional(),
+    S3_SECRET_ACCESS_KEY: z.string().optional(),
+    S3_PUBLIC_BUCKET: z.string().optional(),
+    S3_PRIVATE_BUCKET: z.string().optional(),
+    /** Base URL for public files in S3 mode (bucket website / CDN), e.g. https://cdn.example.com */
+    S3_PUBLIC_URL: z.string().optional(),
+
+    /** "mock" simulates payments locally; "razorpay" uses Razorpay (test or live keys). */
+    PAYMENTS_DRIVER: z.enum(['mock', 'razorpay']).default('mock'),
+    RAZORPAY_KEY_ID: z.string().optional(),
+    RAZORPAY_KEY_SECRET: z.string().optional(),
+    RAZORPAY_WEBHOOK_SECRET: z.string().optional(),
+
+    /** HMAC key for booking pass QR codes; defaults to one derived from JWT_ACCESS_SECRET. */
+    PASS_SECRET: z.string().min(32).optional(),
+    /** Business time zone for opening hours and calendar days. */
+    APP_TIMEZONE: z.string().default('Asia/Kolkata'),
+    /** false disables the background scheduler (tests drive it directly). */
+    SCHEDULER_ENABLED: bool.default(true),
+    /** Swagger UI at /api/docs. Defaults to on, except in production. */
+    API_DOCS: bool.optional(),
+    /** Error tracking (Sentry). Empty = off. */
+    SENTRY_DSN: z.string().url().optional().or(z.literal('').transform(() => undefined)),
   })
   .superRefine((env, ctx) => {
+    if (env.STORAGE_DRIVER === 's3') {
+      for (const k of ['S3_REGION', 'S3_PUBLIC_BUCKET', 'S3_PRIVATE_BUCKET', 'S3_PUBLIC_URL'] as const) {
+        if (!env[k]) ctx.addIssue({ code: 'custom', path: [k], message: 'Required when STORAGE_DRIVER=s3' });
+      }
+    }
+    if (env.PAYMENTS_DRIVER === 'razorpay') {
+      for (const k of ['RAZORPAY_KEY_ID', 'RAZORPAY_KEY_SECRET', 'RAZORPAY_WEBHOOK_SECRET'] as const) {
+        if (!env[k]) ctx.addIssue({ code: 'custom', path: [k], message: 'Required when PAYMENTS_DRIVER=razorpay' });
+      }
+    }
+    if (env.NODE_ENV === 'production' && env.PAYMENTS_DRIVER === 'mock') {
+      ctx.addIssue({ code: 'custom', path: ['PAYMENTS_DRIVER'], message: 'mock payments are not allowed in production' });
+    }
+    if (env.NODE_ENV === 'production' && env.MAIL_TRANSPORT === 'log') {
+      ctx.addIssue({ code: 'custom', path: ['MAIL_TRANSPORT'], message: 'production must send real emails: set MAIL_TRANSPORT=smtp and SMTP_URL' });
+    }
+    if (env.NODE_ENV === 'production' && !env.REQUIRE_EMAIL_VERIFICATION) {
+      ctx.addIssue({ code: 'custom', path: ['REQUIRE_EMAIL_VERIFICATION'], message: 'must be true in production (anyone could register with someone else’s email)' });
+    }
     if (env.MAIL_TRANSPORT === 'smtp' && !env.SMTP_URL) {
       ctx.addIssue({ code: 'custom', path: ['SMTP_URL'], message: 'Required when MAIL_TRANSPORT=smtp' });
     }
@@ -37,6 +88,7 @@ export const envSchema = z
   .transform((env) => ({
     ...env,
     COOKIE_SECURE: env.COOKIE_SECURE ?? env.NODE_ENV === 'production',
+    API_DOCS: env.API_DOCS ?? env.NODE_ENV !== 'production',
     WEB_ORIGINS: env.WEB_ORIGIN.split(',').map((o) => o.trim()).filter(Boolean),
   }));
 
