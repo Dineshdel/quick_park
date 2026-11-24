@@ -32,14 +32,26 @@ export class PaymentsService {
     const b = await this.prisma.booking.findFirst({ where: { id: bookingId, userId } });
     if (!b) throw Errors.notFound('Booking');
     if (b.status !== 'PENDING_PAYMENT' || !b.holdExpiresAt || b.holdExpiresAt <= new Date()) {
-      throw new AppException(HttpStatus.CONFLICT, 'INVALID_STATE', 'This booking can no longer be paid. Please book again.');
+      throw new AppException(
+        HttpStatus.CONFLICT,
+        'INVALID_STATE',
+        'This booking can no longer be paid. Please book again.',
+      );
     }
     const purpose = b.extendedFromId ? 'EXTENSION' : 'BOOKING';
-    let payment = await this.prisma.payment.findFirst({ where: { bookingId, status: 'CREATED', provider: this.provider.name } });
+    let payment = await this.prisma.payment.findFirst({
+      where: { bookingId, status: 'CREATED', provider: this.provider.name },
+    });
     if (!payment) {
       const order = await this.provider.createOrder(b.amountPaise, b.code);
       payment = await this.prisma.payment.create({
-        data: { bookingId, purpose, provider: this.provider.name, providerOrderId: order.orderId, amountPaise: b.amountPaise },
+        data: {
+          bookingId,
+          purpose,
+          provider: this.provider.name,
+          providerOrderId: order.orderId,
+          amountPaise: b.amountPaise,
+        },
       });
     }
     return {
@@ -63,7 +75,10 @@ export class PaymentsService {
   /** Mock driver only: the customer's simulated checkout result. Ownership is checked. */
   async mockPay(userId: string, orderId: string, outcome: 'success' | 'failure') {
     if (this.provider.name !== 'mock') throw Errors.notFound('Endpoint');
-    const p = await this.prisma.payment.findUnique({ where: { providerOrderId: orderId }, include: { booking: { select: { userId: true } } } });
+    const p = await this.prisma.payment.findUnique({
+      where: { providerOrderId: orderId },
+      include: { booking: { select: { userId: true } } },
+    });
     if (!p || p.booking.userId !== userId) throw Errors.notFound('Payment');
     const event: PaidEvent = {
       eventId: `mock:${orderId}:${outcome}`,
@@ -82,42 +97,104 @@ export class PaymentsService {
     let autoRefund: { paymentId: string; amount: number; reason?: string } | null = null;
     const touched = await this.prisma.$transaction(async (tx) => {
       try {
-        await tx.webhookEvent.create({ data: { provider: this.provider.name, eventId: event.eventId, payload, processedAt: new Date() } });
+        await tx.webhookEvent.create({
+          data: {
+            provider: this.provider.name,
+            eventId: event.eventId,
+            payload,
+            processedAt: new Date(),
+          },
+        });
       } catch (e) {
         if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') return null; // replay
         throw e;
       }
-      const payment = await tx.payment.findUnique({ where: { providerOrderId: event.orderId }, include: { booking: true } });
+      const payment = await tx.payment.findUnique({
+        where: { providerOrderId: event.orderId },
+        include: { booking: true },
+      });
       if (!payment) {
         this.logger.warn(`payment event for unknown order ${event.orderId}`);
         return null;
       }
       if (payment.status === 'PAID') return null;
       if (event.type === 'failed') {
-        await tx.payment.update({ where: { id: payment.id }, data: { status: 'FAILED', providerPaymentId: event.paymentId } });
+        await tx.payment.update({
+          where: { id: payment.id },
+          data: { status: 'FAILED', providerPaymentId: event.paymentId },
+        });
         return null;
       }
       if (event.amountPaise !== payment.amountPaise) {
         // Money arrived but not the right amount: record what was received, don't confirm, refund it all.
-        this.logger.error(`amount mismatch on ${event.orderId}: ${event.amountPaise} vs ${payment.amountPaise}`);
-        await tx.payment.update({ where: { id: payment.id }, data: { status: 'PAID', providerPaymentId: event.paymentId, paidAt: new Date(), amountPaise: event.amountPaise } });
+        this.logger.error(
+          `amount mismatch on ${event.orderId}: ${event.amountPaise} vs ${payment.amountPaise}`,
+        );
+        await tx.payment.update({
+          where: { id: payment.id },
+          data: {
+            status: 'PAID',
+            providerPaymentId: event.paymentId,
+            paidAt: new Date(),
+            amountPaise: event.amountPaise,
+          },
+        });
         if (payment.booking.status === 'PENDING_PAYMENT') {
-          await tx.booking.update({ where: { id: payment.bookingId }, data: { status: 'EXPIRED' } });
+          await tx.booking.update({
+            where: { id: payment.bookingId },
+            data: { status: 'EXPIRED' },
+          });
         }
-        if (event.amountPaise > 0) autoRefund = { paymentId: payment.id, amount: event.amountPaise, reason: 'Paid amount did not match the booking price' };
+        if (event.amountPaise > 0)
+          autoRefund = {
+            paymentId: payment.id,
+            amount: event.amountPaise,
+            reason: 'Paid amount did not match the booking price',
+          };
         return payment.booking;
       }
-      await tx.payment.update({ where: { id: payment.id }, data: { status: 'PAID', providerPaymentId: event.paymentId, paidAt: new Date() } });
+      await tx.payment.update({
+        where: { id: payment.id },
+        data: { status: 'PAID', providerPaymentId: event.paymentId, paidAt: new Date() },
+      });
       const b = payment.booking;
       if (b.status === 'PENDING_PAYMENT') {
         // If the hold lapsed, the slot may have been sold since: re-check under the capacity lock.
         let ok = !!b.holdExpiresAt && b.holdExpiresAt > new Date();
         if (!ok) {
           await this.availability.lockCapacity(tx, b.locationId, b.vehicleTypeId);
-          ok = (await this.availability.free(b.locationId, b.vehicleTypeId, b.startAt, b.endAt, tx, b.id)) > 0;
+          ok =
+            (await this.availability.free(
+              b.locationId,
+              b.vehicleTypeId,
+              b.startAt,
+              b.endAt,
+              tx,
+              b.id,
+              b.zoneId,
+            )) > 0;
+        }
+        // Lapsed hold on a named slot: keep it if still free, else move to another free slot on the same floor.
+        let slotId = b.slotId;
+        if (ok && b.slotId && b.zoneId && !(b.holdExpiresAt && b.holdExpiresAt > new Date())) {
+          const picked = await this.availability.pickSlot(
+            tx,
+            b.zoneId,
+            b.vehicleTypeId,
+            b.startAt,
+            b.endAt,
+            b.slotId,
+            true,
+            b.id,
+          );
+          ok = picked !== null;
+          slotId = picked ?? null;
         }
         if (ok) {
-          await tx.booking.update({ where: { id: b.id }, data: { status: 'CONFIRMED', confirmedAt: new Date(), holdExpiresAt: null } });
+          await tx.booking.update({
+            where: { id: b.id },
+            data: { status: 'CONFIRMED', confirmedAt: new Date(), holdExpiresAt: null, slotId },
+          });
           confirmedBookingId = b.id;
         } else {
           await tx.booking.update({ where: { id: b.id }, data: { status: 'EXPIRED' } });
@@ -133,8 +210,17 @@ export class PaymentsService {
       await this.realtime.publish(touched.locationId, touched.vehicleTypeId);
     }
     if (autoRefund) {
-      const { paymentId, amount, reason } = autoRefund as { paymentId: string; amount: number; reason?: string };
-      await this.refund(paymentId, amount, reason ?? 'Payment arrived after the booking expired', null);
+      const { paymentId, amount, reason } = autoRefund as {
+        paymentId: string;
+        amount: number;
+        reason?: string;
+      };
+      await this.refund(
+        paymentId,
+        amount,
+        reason ?? 'Payment arrived after the booking expired',
+        null,
+      );
     }
   }
 
@@ -147,12 +233,22 @@ export class PaymentsService {
     const refund = await this.prisma.$transaction(
       async (tx) => {
         await tx.$queryRaw`SELECT id FROM payments WHERE id = ${paymentId}::uuid FOR UPDATE`;
-        const p = await tx.payment.findUnique({ where: { id: paymentId }, include: { refunds: true } });
-        if (!p || p.status !== 'PAID') throw Errors.badRequest('PAYMENT_INVALID', 'Only paid payments can be refunded');
-        const already = p.refunds.filter((r) => r.status !== 'FAILED').reduce((sum, r) => sum + r.amountPaise, 0)
-          + p.refunds.filter((r) => r.status === 'FAILED' && r.attempts < REFUND_MAX_ATTEMPTS).reduce((sum, r) => sum + r.amountPaise, 0);
+        const p = await tx.payment.findUnique({
+          where: { id: paymentId },
+          include: { refunds: true },
+        });
+        if (!p || p.status !== 'PAID')
+          throw Errors.badRequest('PAYMENT_INVALID', 'Only paid payments can be refunded');
+        const already =
+          p.refunds
+            .filter((r) => r.status !== 'FAILED')
+            .reduce((sum, r) => sum + r.amountPaise, 0) +
+          p.refunds
+            .filter((r) => r.status === 'FAILED' && r.attempts < REFUND_MAX_ATTEMPTS)
+            .reduce((sum, r) => sum + r.amountPaise, 0);
         const amount = Math.min(amountPaise, p.amountPaise - already);
-        if (amount <= 0) throw Errors.badRequest('PAYMENT_INVALID', 'This payment is already fully refunded');
+        if (amount <= 0)
+          throw Errors.badRequest('PAYMENT_INVALID', 'This payment is already fully refunded');
         let status: 'PROCESSED' | 'FAILED' = 'PROCESSED';
         let providerRefundId: string | null = null;
         let lastError: string | null = null;
@@ -164,12 +260,27 @@ export class PaymentsService {
           status = 'FAILED';
         }
         return tx.refund.create({
-          data: { paymentId, bookingId: p.bookingId, amountPaise: amount, status, providerRefundId, reason, createdById: actorId, lastError, lastAttemptAt: new Date() },
+          data: {
+            paymentId,
+            bookingId: p.bookingId,
+            amountPaise: amount,
+            status,
+            providerRefundId,
+            reason,
+            createdById: actorId,
+            lastError,
+            lastAttemptAt: new Date(),
+          },
         });
       },
       { timeout: 30_000 },
     );
-    await this.audit.log(actorId, 'refund.create', 'booking', refund.bookingId, { paymentId, amount: refund.amountPaise, status: refund.status, reason });
+    await this.audit.log(actorId, 'refund.create', 'booking', refund.bookingId, {
+      paymentId,
+      amount: refund.amountPaise,
+      status: refund.status,
+      reason,
+    });
     return refund;
   }
 
@@ -186,30 +297,57 @@ export class PaymentsService {
     });
     let processed = 0;
     for (const r of due) {
-      if (r.lastAttemptAt && now.getTime() - r.lastAttemptAt.getTime() < r.attempts * 5 * 60_000) continue;
+      if (r.lastAttemptAt && now.getTime() - r.lastAttemptAt.getTime() < r.attempts * 5 * 60_000)
+        continue;
       // Claim it (attempts is the version) so two workers never call the provider twice.
-      const claimed = await this.prisma.refund.updateMany({ where: { id: r.id, status: 'FAILED', attempts: r.attempts }, data: { attempts: { increment: 1 }, lastAttemptAt: now } });
+      const claimed = await this.prisma.refund.updateMany({
+        where: { id: r.id, status: 'FAILED', attempts: r.attempts },
+        data: { attempts: { increment: 1 }, lastAttemptAt: now },
+      });
       if (!claimed.count) continue;
       try {
-        const { refundId } = await this.provider.refund(r.payment.providerPaymentId!, r.amountPaise);
-        await this.prisma.refund.update({ where: { id: r.id }, data: { status: 'PROCESSED', providerRefundId: refundId, lastError: null } });
-        await this.audit.log(null, 'refund.retry_ok', 'booking', r.bookingId, { refundId: r.id, attempt: r.attempts + 1 });
+        const { refundId } = await this.provider.refund(
+          r.payment.providerPaymentId!,
+          r.amountPaise,
+        );
+        await this.prisma.refund.update({
+          where: { id: r.id },
+          data: { status: 'PROCESSED', providerRefundId: refundId, lastError: null },
+        });
+        await this.audit.log(null, 'refund.retry_ok', 'booking', r.bookingId, {
+          refundId: r.id,
+          attempt: r.attempts + 1,
+        });
         processed++;
       } catch (e) {
-        await this.prisma.refund.update({ where: { id: r.id }, data: { lastError: (e as Error).message.slice(0, 500) } });
+        await this.prisma.refund.update({
+          where: { id: r.id },
+          data: { lastError: (e as Error).message.slice(0, 500) },
+        });
       }
     }
     return processed;
   }
 
   /** Refund `amountPaise` across a booking's paid payments (newest first). */
-  async refundBooking(bookingId: string, amountPaise: number, reason: string, actorId: string | null) {
-    const payments = await this.prisma.payment.findMany({ where: { bookingId, status: 'PAID' }, orderBy: { paidAt: 'desc' }, include: { refunds: true } });
+  async refundBooking(
+    bookingId: string,
+    amountPaise: number,
+    reason: string,
+    actorId: string | null,
+  ) {
+    const payments = await this.prisma.payment.findMany({
+      where: { bookingId, status: 'PAID' },
+      orderBy: { paidAt: 'desc' },
+      include: { refunds: true },
+    });
     let left = amountPaise;
     let refunded = 0;
     for (const p of payments) {
       if (left <= 0) break;
-      const reserved = p.refunds.filter((r) => r.status !== 'FAILED' || r.attempts < REFUND_MAX_ATTEMPTS).reduce((s, r) => s + r.amountPaise, 0);
+      const reserved = p.refunds
+        .filter((r) => r.status !== 'FAILED' || r.attempts < REFUND_MAX_ATTEMPTS)
+        .reduce((s, r) => s + r.amountPaise, 0);
       const avail = p.amountPaise - reserved;
       if (avail <= 0) continue;
       const r = await this.refund(p.id, Math.min(avail, left), reason, actorId);
@@ -221,8 +359,14 @@ export class PaymentsService {
 
   async paidAndRefunded(bookingId: string) {
     const [paid, refunded] = await Promise.all([
-      this.prisma.payment.aggregate({ where: { bookingId, status: 'PAID' }, _sum: { amountPaise: true } }),
-      this.prisma.refund.aggregate({ where: { bookingId, status: 'PROCESSED' }, _sum: { amountPaise: true } }),
+      this.prisma.payment.aggregate({
+        where: { bookingId, status: 'PAID' },
+        _sum: { amountPaise: true },
+      }),
+      this.prisma.refund.aggregate({
+        where: { bookingId, status: 'PROCESSED' },
+        _sum: { amountPaise: true },
+      }),
     ]);
     return { paid: paid._sum.amountPaise ?? 0, refunded: refunded._sum.amountPaise ?? 0 };
   }

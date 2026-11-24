@@ -13,15 +13,22 @@ import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
 import { api } from '@/shared/lib/api';
 import { applyApiError } from '@/shared/lib/form-errors';
+import { ErrorPopup } from '@/shared/ui/confirm-dialog';
 
 const schema = z
   .object({ password: passwordSchema, confirm: z.string() })
-  .refine((v) => v.password === v.confirm, { path: ['confirm'], message: 'Passwords do not match' });
+  .refine((v) => v.password === v.confirm, {
+    path: ['confirm'],
+    message: 'Passwords do not match',
+  });
 
 export function ResetForm() {
   const token = useSearchParams().get('token') ?? '';
   const [done, setDone] = useState(false);
-  const form = useForm<z.infer<typeof schema>>({ resolver: zodResolver(schema), defaultValues: { password: '', confirm: '' } });
+  const form = useForm<z.infer<typeof schema>>({
+    resolver: zodResolver(schema),
+    defaultValues: { password: '', confirm: '' },
+  });
   const { errors, isSubmitting } = form.formState;
 
   const onSubmit = form.handleSubmit(async ({ password }) => {
@@ -47,7 +54,7 @@ export function ResetForm() {
 
   return (
     <form onSubmit={onSubmit} className="grid gap-4" noValidate>
-      {errors.root && <Alert variant="destructive">{errors.root.message}</Alert>}
+      <ErrorPopup message={errors.root?.message} onClose={() => form.clearErrors('root')} />
       <FormField label="New password" error={errors.password?.message} hint="At least 8 characters">
         <Input type="password" autoComplete="new-password" {...form.register('password')} />
       </FormField>

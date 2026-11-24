@@ -14,7 +14,10 @@ export default function NewLocationPage() {
   const qc = useQueryClient();
   const policies = usePolicies();
   return (
-    <PageShell title="New parking place" description="Saved as a draft. Next you'll add slots, prices and photos.">
+    <PageShell
+      title="New parking place"
+      description="Saved as a draft. Next you'll add slots, prices and photos."
+    >
       <Card>
         <CardContent className="pt-6">
           {policies.isPending ? (

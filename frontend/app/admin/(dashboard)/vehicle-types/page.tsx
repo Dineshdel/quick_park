@@ -14,7 +14,9 @@ export default function VehicleTypesPage() {
       <SimpleMasterPage
         endpoint="/admin/vehicle-types"
         noun="vehicle type"
-        schema={vehicleTypeCreateSchema as unknown as ComponentProps<typeof SimpleMasterPage>['schema']}
+        schema={
+          vehicleTypeCreateSchema as unknown as ComponentProps<typeof SimpleMasterPage>['schema']
+        }
         withCode
       />
     </PageShell>

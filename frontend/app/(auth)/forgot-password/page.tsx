@@ -12,15 +12,21 @@ import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
 import { api } from '@/shared/lib/api';
 import { applyApiError } from '@/shared/lib/form-errors';
+import { ErrorPopup } from '@/shared/ui/confirm-dialog';
 
 export default function ForgotPasswordPage() {
   const [message, setMessage] = useState<string | null>(null);
-  const form = useForm<EmailOnlyInput>({ resolver: zodResolver(emailOnlySchema), defaultValues: { email: '' } });
+  const form = useForm<EmailOnlyInput>({
+    resolver: zodResolver(emailOnlySchema),
+    defaultValues: { email: '' },
+  });
   const { errors, isSubmitting } = form.formState;
 
   const onSubmit = form.handleSubmit(async (values) => {
     try {
-      setMessage((await api<{ message: string }>('/auth/forgot-password', { body: values })).message);
+      setMessage(
+        (await api<{ message: string }>('/auth/forgot-password', { body: values })).message,
+      );
     } catch (e) {
       applyApiError(e, form.setError);
     }
@@ -32,7 +38,7 @@ export default function ForgotPasswordPage() {
         <Alert variant="success">{message}. The link is valid for 30 minutes.</Alert>
       ) : (
         <form onSubmit={onSubmit} className="grid gap-4" noValidate>
-          {errors.root && <Alert variant="destructive">{errors.root.message}</Alert>}
+          <ErrorPopup message={errors.root?.message} onClose={() => form.clearErrors('root')} />
           <FormField label="Email" error={errors.email?.message}>
             <Input type="email" autoComplete="email" {...form.register('email')} />
           </FormField>

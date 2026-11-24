@@ -16,11 +16,13 @@ import { Input } from '@/shared/ui/input';
 import { api, session, type AuthResult } from '@/shared/lib/api';
 import { homeFor } from '@/shared/lib/auth/role-home';
 import { applyApiError } from '@/shared/lib/form-errors';
+import { ErrorPopup } from '@/shared/ui/confirm-dialog';
 
 export function RegisterForm() {
   const router = useRouter();
   const params = useSearchParams();
-  const initialRole: SelfServiceRole = params.get('role') === 'PARKING_OWNER' ? 'PARKING_OWNER' : 'VEHICLE_OWNER';
+  const initialRole: SelfServiceRole =
+    params.get('role') === 'PARKING_OWNER' ? 'PARKING_OWNER' : 'VEHICLE_OWNER';
   const [sentTo, setSentTo] = useState<string | null>(null);
   const [created, setCreated] = useState(false);
   const form = useForm<RegisterInput>({
@@ -53,7 +55,8 @@ export function RegisterForm() {
   if (sentTo) {
     return (
       <Alert variant="success">
-        We sent a verification link to <strong>{sentTo}</strong>. Open it within 24 hours, then sign in.
+        We sent a verification link to <strong>{sentTo}</strong>. Open it within 24 hours, then sign
+        in.
       </Alert>
     );
   }
@@ -65,7 +68,9 @@ export function RegisterForm() {
           let user = r.user;
           if (r.needsRole) {
             // New Google account: apply the account type already picked on this form.
-            const chosen = await api<AuthResult>('/auth/choose-role', { body: { role: form.getValues('role') } });
+            const chosen = await api<AuthResult>('/auth/choose-role', {
+              body: { role: form.getValues('role') },
+            });
             session.apply(chosen);
             user = chosen.user;
           }
@@ -73,7 +78,7 @@ export function RegisterForm() {
         }}
       />
       <form onSubmit={onSubmit} className="grid gap-4" noValidate>
-        {errors.root && <Alert variant="destructive">{errors.root.message}</Alert>}
+        <ErrorPopup message={errors.root?.message} onClose={() => form.clearErrors('root')} />
         <Controller
           control={form.control}
           name="role"

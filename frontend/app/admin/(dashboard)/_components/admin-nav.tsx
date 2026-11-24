@@ -32,7 +32,11 @@ interface Counts {
 
 export function AdminSidebar() {
   const t = useT();
-  const c = useQuery({ queryKey: ['admin-overview'], queryFn: () => api<Counts>('/admin/overview'), refetchInterval: 60_000 }).data;
+  const c = useQuery({
+    queryKey: ['admin-overview'],
+    queryFn: () => api<Counts>('/admin/overview'),
+    refetchInterval: 60_000,
+  }).data;
   return (
     <RoleSidebar
       label="Admin"
@@ -46,17 +50,32 @@ export function AdminSidebar() {
         {
           title: t('side.group.operations'),
           items: [
-            { href: '/admin/approvals', label: t('side.approvals'), icon: BadgeCheck, count: c ? c.pendingKyc + c.pendingLocations : 0 },
+            {
+              href: '/admin/approvals',
+              label: t('side.approvals'),
+              icon: BadgeCheck,
+              count: c ? c.pendingKyc + c.pendingLocations : 0,
+            },
             { href: '/admin/places', label: t('side.places'), icon: MapPin },
             { href: '/admin/users', label: t('side.users'), icon: Users },
             { href: '/admin/bookings', label: t('side.bookings'), icon: CalendarCheck },
-            { href: '/admin/disputes', label: t('side.disputes'), icon: MessageSquareWarning, count: c?.openDisputes },
+            {
+              href: '/admin/disputes',
+              label: t('side.disputes'),
+              icon: MessageSquareWarning,
+              count: c?.openDisputes,
+            },
           ],
         },
         {
           title: t('side.group.money'),
           items: [
-            { href: '/admin/payments', label: t('side.payments'), icon: CreditCard, count: c?.failedRefunds },
+            {
+              href: '/admin/payments',
+              label: t('side.payments'),
+              icon: CreditCard,
+              count: c?.failedRefunds,
+            },
             { href: '/admin/payouts', label: t('side.payouts'), icon: Wallet },
             { href: '/admin/reports', label: t('side.reports'), icon: BarChart3 },
           ],
@@ -70,7 +89,10 @@ export function AdminSidebar() {
             { href: '/admin/settings', label: t('side.settings'), icon: Settings },
           ],
         },
-        { title: t('side.group.system'), items: [{ href: '/admin/audit', label: t('side.audit'), icon: FileClock }] },
+        {
+          title: t('side.group.system'),
+          items: [{ href: '/admin/audit', label: t('side.audit'), icon: FileClock }],
+        },
       ]}
     />
   );

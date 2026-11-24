@@ -2,8 +2,8 @@
 
 import { GoogleLogin } from '@react-oauth/google';
 import { useState } from 'react';
-import { Alert } from '@/shared/ui/alert';
 import { api, ApiError, session, type AuthResult } from '@/shared/lib/api';
+import { ErrorPopup } from '@/shared/ui/confirm-dialog';
 
 /** "Continue with Google": GIS returns an ID token, which the API verifies server-side. */
 export function GoogleButton({ onSuccess }: { onSuccess: (r: AuthResult) => void }) {
@@ -18,7 +18,9 @@ export function GoogleButton({ onSuccess }: { onSuccess: (r: AuthResult) => void
           onSuccess={async ({ credential }) => {
             if (!credential) return setError('Google sign-in failed');
             try {
-              const result = await api<AuthResult>('/auth/google', { body: { idToken: credential } });
+              const result = await api<AuthResult>('/auth/google', {
+                body: { idToken: credential },
+              });
               session.apply(result);
               onSuccess(result);
             } catch (e) {
@@ -28,7 +30,7 @@ export function GoogleButton({ onSuccess }: { onSuccess: (r: AuthResult) => void
           onError={() => setError('Google sign-in failed')}
         />
       </div>
-      {error && <Alert variant="destructive">{error}</Alert>}
+      <ErrorPopup message={error} onClose={() => setError(null)} />
       <div className="flex items-center gap-3 text-xs text-muted-foreground">
         <span className="h-px flex-1 bg-border" /> or <span className="h-px flex-1 bg-border" />
       </div>

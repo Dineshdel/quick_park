@@ -14,16 +14,23 @@ import { Input } from '@/shared/ui/input';
 import { api, ApiError, session, type AuthResult } from '@/shared/lib/api';
 import { homeFor, safeNext } from '@/shared/lib/auth/role-home';
 import { applyApiError } from '@/shared/lib/form-errors';
+import { ErrorPopup } from '@/shared/ui/confirm-dialog';
 
 export function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
   const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null);
   const [resent, setResent] = useState(false);
-  const form = useForm<LoginInput>({ resolver: zodResolver(loginSchema), defaultValues: { email: '', password: '' } });
+  const form = useForm<LoginInput>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: { email: '', password: '' },
+  });
   const { errors, isSubmitting } = form.formState;
 
-  const done = (r: AuthResult) => router.replace(r.user.role ? (safeNext(params.get('next')) ?? homeFor(r.user.role)) : '/choose-role');
+  const done = (r: AuthResult) =>
+    router.replace(
+      r.user.role ? (safeNext(params.get('next')) ?? homeFor(r.user.role)) : '/choose-role',
+    );
 
   const onSubmit = form.handleSubmit(async (values) => {
     setUnverifiedEmail(null);
@@ -32,7 +39,8 @@ export function LoginForm() {
       session.apply(result);
       done(result);
     } catch (e) {
-      if (e instanceof ApiError && e.code === 'EMAIL_NOT_VERIFIED') setUnverifiedEmail(values.email);
+      if (e instanceof ApiError && e.code === 'EMAIL_NOT_VERIFIED')
+        setUnverifiedEmail(values.email);
       applyApiError(e, form.setError);
     }
   });
@@ -41,7 +49,7 @@ export function LoginForm() {
     <div className="grid gap-4">
       <GoogleButton onSuccess={done} />
       <form onSubmit={onSubmit} className="grid gap-4" noValidate>
-        {errors.root && <Alert variant="destructive">{errors.root.message}</Alert>}
+        <ErrorPopup message={errors.root?.message} onClose={() => form.clearErrors('root')} />
         {unverifiedEmail && (
           <Alert>
             {resent ? (
@@ -51,7 +59,9 @@ export function LoginForm() {
                 type="button"
                 className="underline"
                 onClick={async () => {
-                  await api('/auth/resend-verification', { body: { email: unverifiedEmail } }).catch(() => undefined);
+                  await api('/auth/resend-verification', {
+                    body: { email: unverifiedEmail },
+                  }).catch(() => undefined);
                   setResent(true);
                 }}
               >

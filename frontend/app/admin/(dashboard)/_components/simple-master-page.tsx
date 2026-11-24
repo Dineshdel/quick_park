@@ -13,6 +13,7 @@ import { Input } from '@/shared/ui/input';
 import { api, ApiError } from '@/shared/lib/api';
 import { applyApiError } from '@/shared/lib/form-errors';
 import { StatusBadge } from './status-badge';
+import { ErrorPopup, useConfirm } from '@/shared/ui/confirm-dialog';
 
 /** Common shape of vehicle types and categories. `code` exists only on vehicle types. */
 export interface MasterRow {
@@ -48,6 +49,7 @@ export function SimpleMasterPage({
   withCode?: boolean;
 }) {
   const qc = useQueryClient();
+  const ask = useConfirm();
   const key = ['admin', endpoint];
   const list = useQuery({ queryKey: key, queryFn: () => api<MasterRow[]>(endpoint) });
   const [editing, setEditing] = useState<MasterRow | null>(null);
@@ -70,6 +72,13 @@ export function SimpleMasterPage({
   };
 
   const onSubmit = form.handleSubmit(async (values) => {
+    if (
+      !(await ask({
+        title: editing ? `Save changes to “${editing.name}”?` : `Add ${noun} “${values.name}”?`,
+        confirmLabel: editing ? 'Save' : 'Add',
+      }))
+    )
+      return;
     try {
       if (editing) {
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -99,11 +108,7 @@ export function SimpleMasterPage({
   return (
     <div className="grid items-start gap-6 lg:grid-cols-[1fr_340px]">
       <Card className="overflow-hidden">
-        {rowError && (
-          <Alert variant="destructive" className="m-4">
-            {rowError}
-          </Alert>
-        )}
+        <ErrorPopup message={rowError} onClose={() => setRowError(null)} />
         {list.isPending ? (
           <p className="p-6 text-sm text-muted-foreground">Loading…</p>
         ) : list.isError ? (
@@ -111,7 +116,9 @@ export function SimpleMasterPage({
             Could not load the list.
           </Alert>
         ) : list.data.length === 0 ? (
-          <p className="p-6 text-sm text-muted-foreground">Nothing here yet. Add the first {noun} with the form.</p>
+          <p className="p-6 text-sm text-muted-foreground">
+            Nothing here yet. Add the first {noun} with the form.
+          </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -154,9 +161,14 @@ export function SimpleMasterPage({
                           className="text-destructive"
                           disabled={rowAction.isPending}
                           onClick={() => {
-                            if (confirm(`Delete “${row.name}”? This cannot be undone.`)) {
-                              rowAction.mutate({ row, action: 'delete' });
-                            }
+                            void ask({
+                              title: `Delete “${row.name}”?`,
+                              description: 'This cannot be undone.',
+                              confirmLabel: 'Delete',
+                              tone: 'danger',
+                            }).then((ok) => {
+                              if (ok) void rowAction.mutate({ row, action: 'delete' });
+                            });
                           }}
                         >
                           Delete
@@ -177,7 +189,7 @@ export function SimpleMasterPage({
         </CardHeader>
         <CardContent>
           <form onSubmit={onSubmit} className="grid gap-4" noValidate>
-            {errors.root && <Alert variant="destructive">{errors.root.message}</Alert>}
+            <ErrorPopup message={errors.root?.message} onClose={() => form.clearErrors('root')} />
             {notice && <Alert variant="success">{notice}</Alert>}
             {withCode && (
               <FormField
@@ -185,20 +197,37 @@ export function SimpleMasterPage({
                 error={errors.code?.message}
                 hint={editing ? 'The code cannot be changed.' : 'Capital letters, e.g. EV_CAR'}
               >
-                <Input disabled={!!editing} autoCapitalize="characters" {...form.register('code')} />
+                <Input
+                  disabled={!!editing}
+                  autoCapitalize="characters"
+                  {...form.register('code')}
+                />
               </FormField>
             )}
             <FormField label="Name" error={errors.name?.message}>
               <Input {...form.register('name')} />
             </FormField>
-            <FormField label="Icon" error={errors.icon?.message} hint="Optional lucide icon name, e.g. car">
+            <FormField
+              label="Icon"
+              error={errors.icon?.message}
+              hint="Optional lucide icon name, e.g. car"
+            >
               <Input {...form.register('icon')} />
             </FormField>
-            <FormField label="Display order" error={errors.sortOrder?.message} hint="Lower numbers show first">
-              <Input type="number" min={0} {...form.register('sortOrder', { valueAsNumber: true })} />
+            <FormField
+              label="Display order"
+              error={errors.sortOrder?.message}
+              hint="Lower numbers show first"
+            >
+              <Input
+                type="number"
+                min={0}
+                {...form.register('sortOrder', { valueAsNumber: true })}
+              />
             </FormField>
             <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" className="size-4" {...form.register('isActive')} /> Active (shown to users)
+              <input type="checkbox" className="size-4" {...form.register('isActive')} /> Active
+              (shown to users)
             </label>
             <div className="flex gap-2">
               <Button type="submit" loading={isSubmitting}>

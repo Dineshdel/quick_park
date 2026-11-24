@@ -132,6 +132,8 @@ model VehicleType {
 
   vehicles   Vehicle[]
   capacities LocationCapacity[]
+  zoneCaps   ZoneCapacity[]
+  slots      ParkingSlot[]
   prices     PricingPlan[]
   blocks     CapacityBlock[]
   bookings   Booking[]
@@ -179,7 +181,10 @@ model PlatformSettings {
   holdMinutes          Int      @default(10) @map("hold_minutes")
   entryGraceMinutes    Int      @default(15) @map("entry_grace_minutes")
   fewLeftThreshold     Int      @default(3) @map("few_left_threshold")
-  exitGraceMinutes     Int      @default(15) @map("exit_grace_minutes")
+  /// Free minutes after a booking ends before overstay is charged (per started hour).
+  exitGraceMinutes     Int      @default(5) @map("exit_grace_minutes")
+  /// Hourly/daily bookings whose vehicle hasn't checked in this long after the start are released (0 = keep until the end).
+  noShowReleaseMinutes Int      @default(30) @map("no_show_release_minutes")
   updatedAt            DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
   updatedById          String?  @map("updated_by_id") @db.Uuid
 
@@ -321,6 +326,8 @@ model ParkingLocation {
   status               LocationStatus @default(DRAFT)
   rejectionReason      String?        @map("rejection_reason")
   isEvent              Boolean        @default(false) @map("is_event")
+  /// Free parking: no prices, no payment; bookings confirm straight away.
+  isFree               Boolean        @default(false) @map("is_free")
   eventName            String?        @map("event_name")
   eventStartAt         DateTime?      @map("event_start_at") @db.Timestamptz(3)
   eventEndAt           DateTime?      @map("event_end_at") @db.Timestamptz(3)
@@ -334,6 +341,9 @@ model ParkingLocation {
   cancellationPolicy CancellationPolicy? @relation(fields: [cancellationPolicyId], references: [id], onDelete: SetNull)
   photos             LocationPhoto[]
   capacities         LocationCapacity[]
+  areas              ParkingArea[]
+  zones              ParkingZone[]
+  slots              ParkingSlot[]
   prices             PricingPlan[]
   blocks             CapacityBlock[]
   bookings           Booking[]
@@ -372,6 +382,87 @@ model LocationCapacity {
 
   @@unique([locationId, vehicleTypeId])
   @@map("location_capacity")
+}
+
+/// A sub-place inside a place: a campus block, building or separate lot (e.g. "Tech Park Parking").
+/// When a place has areas, its location_capacity rows are the sums of its zones' slots.
+model ParkingArea {
+  id          String   @id @default(uuid()) @db.Uuid
+  locationId  String   @map("location_id") @db.Uuid
+  name        String
+  description String?
+  /// Own map pin when the area is away from the main entrance (null = use the place's pin).
+  lat         Float?
+  lng         Float?
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  location ParkingLocation @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  zones    ParkingZone[]
+
+  @@index([locationId])
+  @@map("parking_areas")
+}
+
+/// A floor or zone inside an area (B1, Ground, Level 4…). `level` orders floors and finds the nearest ones.
+model ParkingZone {
+  id         String   @id @default(uuid()) @db.Uuid
+  areaId     String   @map("area_id") @db.Uuid
+  locationId String   @map("location_id") @db.Uuid
+  name       String
+  level      Int      @default(0)
+  /// Short labels such as "Near lift", "EV charging", "Covered".
+  tags       String[] @default([])
+  sortOrder  Int      @default(0) @map("sort_order")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  area       ParkingArea     @relation(fields: [areaId], references: [id], onDelete: Cascade)
+  location   ParkingLocation @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  capacities ZoneCapacity[]
+  slots      ParkingSlot[]
+  bookings   Booking[]
+
+  @@index([locationId])
+  @@index([areaId])
+  @@map("parking_zones")
+}
+
+/// A named/numbered spot on a floor (P01, 001, A-12). Optional: floors without them work on slot counts only.
+/// When a floor has named slots for a vehicle type, its slot counts are derived from them.
+model ParkingSlot {
+  id            String   @id @default(uuid()) @db.Uuid
+  zoneId        String   @map("zone_id") @db.Uuid
+  locationId    String   @map("location_id") @db.Uuid
+  vehicleTypeId String   @map("vehicle_type_id") @db.Uuid
+  label         String
+  /// false = walk-in / reserved: never given to app bookings.
+  isOnline      Boolean  @default(true) @map("is_online")
+  sortOrder     Int      @default(0) @map("sort_order")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  zone        ParkingZone     @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  location    ParkingLocation @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  vehicleType VehicleType     @relation(fields: [vehicleTypeId], references: [id], onDelete: Restrict)
+  bookings    Booking[]
+
+  @@unique([zoneId, label])
+  @@index([locationId])
+  @@map("parking_slots")
+}
+
+/// Slots of one vehicle type on one floor/zone. Online = bookable in the app; the rest are for walk-ins/reserved.
+model ZoneCapacity {
+  id            String @id @default(uuid()) @db.Uuid
+  zoneId        String @map("zone_id") @db.Uuid
+  vehicleTypeId String @map("vehicle_type_id") @db.Uuid
+  totalSlots    Int    @map("total_slots")
+  onlineSlots   Int    @map("online_slots")
+
+  zone        ParkingZone @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  vehicleType VehicleType @relation(fields: [vehicleTypeId], references: [id], onDelete: Restrict)
+
+  @@unique([zoneId, vehicleTypeId])
+  @@map("zone_capacity")
 }
 
 model PricingPlan {
@@ -427,6 +518,10 @@ model Booking {
   vehicleId         String        @map("vehicle_id") @db.Uuid
   locationId        String        @map("location_id") @db.Uuid
   vehicleTypeId     String        @map("vehicle_type_id") @db.Uuid
+  /// Floor/zone chosen by the customer; null = any floor.
+  zoneId            String?       @map("zone_id") @db.Uuid
+  /// Named slot on the floor (P01…); set when the floor has named slots.
+  slotId            String?       @map("slot_id") @db.Uuid
   planType          PlanType      @map("plan_type")
   quantity          Int           @default(1)
   startAt           DateTime      @map("start_at") @db.Timestamptz(3)
@@ -451,6 +546,8 @@ model Booking {
   vehicle      Vehicle          @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
   location     ParkingLocation  @relation(fields: [locationId], references: [id], onDelete: Restrict)
   vehicleType  VehicleType      @relation(fields: [vehicleTypeId], references: [id], onDelete: Restrict)
+  zone         ParkingZone?     @relation(fields: [zoneId], references: [id], onDelete: SetNull)
+  slot         ParkingSlot?     @relation(fields: [slotId], references: [id], onDelete: SetNull)
   extendedFrom Booking?         @relation("BookingExtension", fields: [extendedFromId], references: [id], onDelete: SetNull)
   extensions   Booking[]        @relation("BookingExtension")
   payments     Payment[]
@@ -460,6 +557,8 @@ model Booking {
 
   @@unique([userId, idempotencyKey])
   @@index([locationId, vehicleTypeId, startAt, endAt])
+  @@index([zoneId, startAt, endAt])
+  @@index([slotId, startAt, endAt])
   @@index([userId, status])
   @@index([status, holdExpiresAt])
   @@map("bookings")

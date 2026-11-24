@@ -12,13 +12,31 @@ import { isThemeChoice, THEME_BOOT_SCRIPT, THEME_COOKIE } from '@/shared/theme/t
 import './globals.css';
 
 const body = Inter({ subsets: ['latin'], variable: '--font-body', display: 'swap' });
-const heading = Lora({ subsets: ['latin'], variable: '--font-heading', weight: ['500', '600', '700'], display: 'swap' });
+const heading = Lora({
+  subsets: ['latin'],
+  variable: '--font-heading',
+  weight: ['500', '600', '700'],
+  display: 'swap',
+});
 // Tamil and Hindi scripts (Inter/Lora have no glyphs for them); only downloaded when those characters appear.
-const tamil = Noto_Sans_Tamil({ subsets: ['tamil'], variable: '--font-tamil', display: 'swap', preload: false });
-const devanagari = Noto_Sans_Devanagari({ subsets: ['devanagari'], variable: '--font-devanagari', display: 'swap', preload: false });
+const tamil = Noto_Sans_Tamil({
+  subsets: ['tamil'],
+  variable: '--font-tamil',
+  display: 'swap',
+  preload: false,
+});
+const devanagari = Noto_Sans_Devanagari({
+  subsets: ['devanagari'],
+  variable: '--font-devanagari',
+  display: 'swap',
+  preload: false,
+});
 
 /** Public site address, used for absolute links in link previews (first WEB_ORIGIN from the root .env). */
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || process.env.WEB_ORIGIN?.split(',')[0]?.trim() || 'http://localhost:3000';
+const SITE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL ||
+  process.env.WEB_ORIGIN?.split(',')[0]?.trim() ||
+  'http://localhost:3000';
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),

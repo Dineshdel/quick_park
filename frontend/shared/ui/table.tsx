@@ -15,14 +15,20 @@ export function DataTable<T>({
   empty?: string;
   className?: string;
 }) {
-  if (!rows.length) return <p className="rounded-lg border p-6 text-center text-sm text-muted-foreground">{empty}</p>;
+  if (!rows.length)
+    return (
+      <p className="rounded-lg border p-6 text-center text-sm text-muted-foreground">{empty}</p>
+    );
   return (
     <div className={cn('overflow-x-auto rounded-lg border', className)}>
       <table className="w-full text-sm">
         <thead className="border-b bg-muted/40 text-left text-muted-foreground">
           <tr>
             {columns.map((c) => (
-              <th key={c.header} className={cn('px-3 py-2 font-medium whitespace-nowrap', c.className)}>
+              <th
+                key={c.header}
+                className={cn('px-3 py-2 font-medium whitespace-nowrap', c.className)}
+              >
                 {c.header}
               </th>
             ))}

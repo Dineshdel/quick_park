@@ -28,12 +28,17 @@ export default function VehicleOwnerHome() {
                 ? 'Loading…'
                 : count === 0
                   ? 'Add a vehicle to get its QR sticker.'
-                  : `${count} vehicle${count === 1 ? '' : 's'}: ${vehicles.data!.slice(0, 3).map((v) => formatPlate(v.plateNumber)).join(', ')}${count > 3 ? '…' : ''}`}
+                  : `${count} vehicle${count === 1 ? '' : 's'}: ${vehicles
+                      .data!.slice(0, 3)
+                      .map((v) => formatPlate(v.plateNumber))
+                      .join(', ')}${count > 3 ? '…' : ''}`}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <Button asChild>
-              <Link href="/vehicle-owner/vehicles">{count === 0 ? 'Add a vehicle' : 'Manage vehicles'}</Link>
+              <Link href="/vehicle-owner/vehicles">
+                {count === 0 ? 'Add a vehicle' : 'Manage vehicles'}
+              </Link>
             </Button>
           </CardContent>
         </Card>
@@ -43,7 +48,9 @@ export default function VehicleOwnerHome() {
             <CardTitle className="flex items-center gap-2 text-lg">
               <Search className="size-5" aria-hidden /> Find parking
             </CardTitle>
-            <CardDescription>Search near you or at your destination and book in a minute.</CardDescription>
+            <CardDescription>
+              Search near you or at your destination and book in a minute.
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <Button asChild variant="outline">
@@ -57,7 +64,9 @@ export default function VehicleOwnerHome() {
             <CardTitle className="flex items-center gap-2 text-lg">
               <CalendarClock className="size-5" aria-hidden /> My bookings
             </CardTitle>
-            <CardDescription>Upcoming, active and past bookings with your entry pass.</CardDescription>
+            <CardDescription>
+              Upcoming, active and past bookings with your entry pass.
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <Button asChild variant="outline">

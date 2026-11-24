@@ -19,7 +19,11 @@ export function FormField({
   return (
     <div className="grid gap-2">
       <Label htmlFor={id}>{label}</Label>
-      {cloneElement(children, { id, 'aria-invalid': !!error || undefined, 'aria-describedby': describedBy })}
+      {cloneElement(children, {
+        id,
+        'aria-invalid': !!error || undefined,
+        'aria-describedby': describedBy,
+      })}
       {error ? (
         <p id={`${id}-error`} className="text-sm text-destructive">
           {error}

@@ -7,6 +7,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { refreshSession } from '@/shared/lib/api';
 import { useSession } from '@/shared/lib/auth/use-session';
 import { GOOGLE_MAPS_KEY } from '@/shared/maps/config';
+import { ConfirmProvider } from '@/shared/ui/confirm-dialog';
 
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
 
@@ -31,7 +32,7 @@ export function Providers({ children }: { children: ReactNode }) {
   const app = (
     <QueryClientProvider client={queryClient}>
       <SessionKeeper />
-      {children}
+      <ConfirmProvider>{children}</ConfirmProvider>
     </QueryClientProvider>
   );
   // Google Maps + Places load once for the whole app when a key is configured.
@@ -42,5 +43,9 @@ export function Providers({ children }: { children: ReactNode }) {
   ) : (
     app
   );
-  return GOOGLE_CLIENT_ID ? <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>{tree}</GoogleOAuthProvider> : tree;
+  return GOOGLE_CLIENT_ID ? (
+    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>{tree}</GoogleOAuthProvider>
+  ) : (
+    tree
+  );
 }

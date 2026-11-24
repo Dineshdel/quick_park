@@ -17,6 +17,7 @@ import { Input } from '@/shared/ui/input';
 import { api, ApiError } from '@/shared/lib/api';
 import { applyApiError } from '@/shared/lib/form-errors';
 import { StatusBadge } from '../_components/status-badge';
+import { ErrorPopup, useConfirm } from '@/shared/ui/confirm-dialog';
 
 const ENDPOINT = '/admin/cancellation-policies';
 const KEY = ['admin', ENDPOINT];
@@ -36,6 +37,7 @@ const EMPTY: FormIn = {
 };
 
 export default function CancellationPoliciesPage() {
+  const ask = useConfirm();
   const qc = useQueryClient();
   const list = useQuery({ queryKey: KEY, queryFn: () => api<CancellationPolicyDto[]>(ENDPOINT) });
   const [editing, setEditing] = useState<CancellationPolicyDto | null>(null);
@@ -56,6 +58,14 @@ export default function CancellationPoliciesPage() {
   };
 
   const onSubmit = form.handleSubmit(async (values) => {
+    if (
+      !(await ask({
+        title: editing ? `Save changes to “${editing.name}”?` : `Add policy “${values.name}”?`,
+        description: 'Refund rules apply to bookings made after saving.',
+        confirmLabel: editing ? 'Save' : 'Add policy',
+      }))
+    )
+      return;
     try {
       if (editing) {
         // The default flag can only be moved, never cleared, so don't send `false` for the current default.
@@ -75,9 +85,16 @@ export default function CancellationPoliciesPage() {
   });
 
   const rowAction = useMutation({
-    mutationFn: async ({ p, action }: { p: CancellationPolicyDto; action: 'default' | 'toggle' | 'delete' }) => {
+    mutationFn: async ({
+      p,
+      action,
+    }: {
+      p: CancellationPolicyDto;
+      action: 'default' | 'toggle' | 'delete';
+    }) => {
       if (action === 'delete') return api(`${ENDPOINT}/${p.id}`, { method: 'DELETE' });
-      const body = action === 'default' ? { isDefault: true, isActive: true } : { isActive: !p.isActive };
+      const body =
+        action === 'default' ? { isDefault: true, isActive: true } : { isActive: !p.isActive };
       return api(`${ENDPOINT}/${p.id}`, { method: 'PATCH', body });
     },
     onMutate: () => setRowError(null),
@@ -95,13 +112,15 @@ export default function CancellationPoliciesPage() {
     >
       <div className="grid items-start gap-6 lg:grid-cols-[1fr_400px]">
         <div className="grid gap-3">
-          {rowError && <Alert variant="destructive">{rowError}</Alert>}
+          <ErrorPopup message={rowError} onClose={() => setRowError(null)} />
           {list.isPending ? (
             <p className="text-sm text-muted-foreground">Loading…</p>
           ) : list.isError ? (
             <Alert variant="destructive">Could not load the policies.</Alert>
           ) : list.data.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No policies yet. The first one you add becomes the default.</p>
+            <p className="text-sm text-muted-foreground">
+              No policies yet. The first one you add becomes the default.
+            </p>
           ) : (
             list.data.map((p) => (
               <Card key={p.id}>
@@ -116,8 +135,15 @@ export default function CancellationPoliciesPage() {
                 <CardContent className="grid gap-3">
                   <ul className="grid gap-1 text-sm">
                     {p.rules.map((r) => (
-                      <li key={r.hoursBefore} className="flex justify-between gap-4 rounded bg-muted/40 px-3 py-1.5">
-                        <span>{r.hoursBefore === 0 ? 'Less than that / no-show' : `${r.hoursBefore}+ hours before start`}</span>
+                      <li
+                        key={r.hoursBefore}
+                        className="flex justify-between gap-4 rounded bg-muted/40 px-3 py-1.5"
+                      >
+                        <span>
+                          {r.hoursBefore === 0
+                            ? 'Less than that / no-show'
+                            : `${r.hoursBefore}+ hours before start`}
+                        </span>
                         <span className="font-medium tabular-nums">{r.refundPct}% refund</span>
                       </li>
                     ))}
@@ -128,10 +154,20 @@ export default function CancellationPoliciesPage() {
                     </Button>
                     {!p.isDefault && (
                       <>
-                        <Button size="sm" variant="ghost" disabled={rowAction.isPending} onClick={() => rowAction.mutate({ p, action: 'default' })}>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={rowAction.isPending}
+                          onClick={() => rowAction.mutate({ p, action: 'default' })}
+                        >
                           Make default
                         </Button>
-                        <Button size="sm" variant="ghost" disabled={rowAction.isPending} onClick={() => rowAction.mutate({ p, action: 'toggle' })}>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={rowAction.isPending}
+                          onClick={() => rowAction.mutate({ p, action: 'toggle' })}
+                        >
                           {p.isActive ? 'Deactivate' : 'Activate'}
                         </Button>
                         <Button
@@ -140,7 +176,14 @@ export default function CancellationPoliciesPage() {
                           className="text-destructive"
                           disabled={rowAction.isPending}
                           onClick={() => {
-                            if (confirm(`Delete “${p.name}”? This cannot be undone.`)) rowAction.mutate({ p, action: 'delete' });
+                            void ask({
+                              title: `Delete “${p.name}”?`,
+                              description: 'This cannot be undone.',
+                              confirmLabel: 'Delete',
+                              tone: 'danger',
+                            }).then((ok) => {
+                              if (ok) void rowAction.mutate({ p, action: 'delete' });
+                            });
                           }}
                         >
                           Delete
@@ -158,17 +201,22 @@ export default function CancellationPoliciesPage() {
           <CardHeader>
             <CardTitle className="text-lg">{editing ? 'Edit policy' : 'Add a policy'}</CardTitle>
             <CardDescription>
-              Each rule means “cancelled at least N hours before start → refund X%”. Include a 0-hour rule for late cancellations.
+              Each rule means “cancelled at least N hours before start → refund X%”. Include a
+              0-hour rule for late cancellations.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={onSubmit} className="grid gap-4" noValidate>
-              {errors.root && <Alert variant="destructive">{errors.root.message}</Alert>}
+              <ErrorPopup message={errors.root?.message} onClose={() => form.clearErrors('root')} />
               {notice && <Alert variant="success">{notice}</Alert>}
               <FormField label="Name" error={errors.name?.message}>
                 <Input {...form.register('name')} />
               </FormField>
-              <FormField label="Description" error={errors.description?.message} hint="Optional, shown to customers">
+              <FormField
+                label="Description"
+                error={errors.description?.message}
+                hint="Optional, shown to customers"
+              >
                 <Input {...form.register('description')} />
               </FormField>
 
@@ -202,7 +250,15 @@ export default function CancellationPoliciesPage() {
                       size="icon"
                       aria-label={`Remove rule ${i + 1}`}
                       disabled={rules.fields.length === 1}
-                      onClick={() => rules.remove(i)}
+                      onClick={() =>
+                        void ask({
+                          title: `Remove rule ${i + 1}?`,
+                          confirmLabel: 'Remove',
+                          tone: 'danger',
+                        }).then((ok) => {
+                          if (ok) void rules.remove(i);
+                        })
+                      }
                     >
                       <Trash2 />
                     </Button>
@@ -224,10 +280,12 @@ export default function CancellationPoliciesPage() {
               {!editing?.isDefault && (
                 <>
                   <label className="flex items-center gap-2 text-sm">
-                    <input type="checkbox" className="size-4" {...form.register('isDefault')} /> Make this the default policy
+                    <input type="checkbox" className="size-4" {...form.register('isDefault')} />{' '}
+                    Make this the default policy
                   </label>
                   <label className="flex items-center gap-2 text-sm">
-                    <input type="checkbox" className="size-4" {...form.register('isActive')} /> Active
+                    <input type="checkbox" className="size-4" {...form.register('isActive')} />{' '}
+                    Active
                   </label>
                 </>
               )}

@@ -8,7 +8,7 @@ import { logout } from '@/shared/lib/api';
 import { homeFor } from '@/shared/lib/auth/role-home';
 import { useSession } from '@/shared/lib/auth/use-session';
 import { useT } from '@/shared/i18n/i18n';
-import { LanguageSelect, ThemeMenu } from './preferences';
+import { LanguageSelect, ThemeToggle } from './preferences';
 
 const ON_CHROME = 'text-chrome-foreground hover:bg-chrome-hover hover:text-white';
 
@@ -29,13 +29,23 @@ export function SiteHeader() {
         </Link>
         <nav className="flex items-center gap-1 sm:gap-2">
           <LanguageSelect />
-          <ThemeMenu />
+          <ThemeToggle />
           {s.status === 'authenticated' ? (
             <>
-              <Button variant="ghost" size="sm" className={`${ON_CHROME} hidden sm:inline-flex`} asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className={`${ON_CHROME} hidden sm:inline-flex`}
+                asChild
+              >
                 <Link href={homeFor(s.user.role)}>{t('nav.dashboard')}</Link>
               </Button>
-              <Button variant="ghost" size="sm" className={`${ON_CHROME} hidden sm:inline-flex`} asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className={`${ON_CHROME} hidden sm:inline-flex`}
+                asChild
+              >
                 <Link href="/account">{s.user.name.split(' ')[0]}</Link>
               </Button>
               <Button
@@ -52,7 +62,12 @@ export function SiteHeader() {
             </>
           ) : s.status === 'anonymous' ? (
             <>
-              <Button variant="ghost" size="sm" className={`${ON_CHROME} hidden sm:inline-flex`} asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className={`${ON_CHROME} hidden sm:inline-flex`}
+                asChild
+              >
                 <Link href="/login">{t('nav.signIn')}</Link>
               </Button>
               <Button size="sm" variant="gold" asChild>

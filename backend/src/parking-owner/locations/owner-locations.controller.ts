@@ -1,7 +1,7 @@
 import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Patch, Post, Put, UploadedFile, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiConsumes, ApiTags } from '@nestjs/swagger';
-import { blockSchema, capacitySchema, locationCreateSchema, locationUpdateSchema, pricingSchema } from '@qp/validation';
+import { blockSchema, capacitySchema, layoutSchema, locationCreateSchema, locationUpdateSchema, pricingSchema } from '@qp/validation';
 import { type z } from 'zod';
 import { type AuthUser } from '../../shared/auth/auth.types';
 import { CurrentUser } from '../../shared/auth/decorators/current-user.decorator';
@@ -63,6 +63,12 @@ export class OwnerLocationsController {
   @ApiZodBody(capacitySchema)
   capacity(@CurrentUser() u: AuthUser, @Id() id: string, @ZodBody(capacitySchema) body: z.output<typeof capacitySchema>) {
     return this.locations.setCapacity(u.id, id, body);
+  }
+
+  @Put(':id/layout')
+  @ApiZodBody(layoutSchema)
+  layout(@CurrentUser() u: AuthUser, @Id() id: string, @ZodBody(layoutSchema) body: z.output<typeof layoutSchema>) {
+    return this.locations.setLayout(u.id, id, body);
   }
 
   @Put(':id/pricing')

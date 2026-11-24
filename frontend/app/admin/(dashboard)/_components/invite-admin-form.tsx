@@ -11,13 +11,26 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/sha
 import { Input } from '@/shared/ui/input';
 import { api } from '@/shared/lib/api';
 import { applyApiError } from '@/shared/lib/form-errors';
+import { ErrorPopup, useConfirm } from '@/shared/ui/confirm-dialog';
 
 export function InviteAdminForm() {
+  const ask = useConfirm();
   const [sent, setSent] = useState<string | null>(null);
-  const form = useForm<AdminInviteInput>({ resolver: zodResolver(adminInviteSchema), defaultValues: { email: '' } });
+  const form = useForm<AdminInviteInput>({
+    resolver: zodResolver(adminInviteSchema),
+    defaultValues: { email: '' },
+  });
   const { errors, isSubmitting } = form.formState;
 
   const onSubmit = form.handleSubmit(async (values) => {
+    if (
+      !(await ask({
+        title: `Invite ${values.email} as an admin?`,
+        description: 'They will get full admin access once they accept the email invite.',
+        confirmLabel: 'Send invite',
+      }))
+    )
+      return;
     setSent(null);
     try {
       await api('/admin/invite', { body: values });
@@ -36,7 +49,7 @@ export function InviteAdminForm() {
       </CardHeader>
       <CardContent>
         <form onSubmit={onSubmit} className="grid gap-4" noValidate>
-          {errors.root && <Alert variant="destructive">{errors.root.message}</Alert>}
+          <ErrorPopup message={errors.root?.message} onClose={() => form.clearErrors('root')} />
           {sent && <Alert variant="success">Invitation sent to {sent}.</Alert>}
           <FormField label="Email" error={errors.email?.message}>
             <Input type="email" {...form.register('email')} />

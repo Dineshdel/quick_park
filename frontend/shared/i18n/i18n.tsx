@@ -13,7 +13,13 @@ const I18nContext = createContext<{ locale: Locale; t: T; setLocale: (l: Locale)
 });
 
 /** The starting locale comes from the qp_lang cookie (read on the server), so the first render is already translated. */
-export function I18nProvider({ initialLocale, children }: { initialLocale: Locale; children: ReactNode }) {
+export function I18nProvider({
+  initialLocale,
+  children,
+}: {
+  initialLocale: Locale;
+  children: ReactNode;
+}) {
   const [locale, setLocaleState] = useState<Locale>(initialLocale);
   const router = useRouter();
 

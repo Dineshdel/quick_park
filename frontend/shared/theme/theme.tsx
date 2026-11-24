@@ -1,11 +1,23 @@
 'use client';
 
-import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import {
+  createContext,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 import { THEME_COOKIE, type ThemeChoice } from './theme-config';
 
 export type { ThemeChoice } from './theme-config';
 
-const ThemeContext = createContext<{ choice: ThemeChoice; resolved: 'light' | 'dark'; setChoice: (c: ThemeChoice) => void }>({
+const ThemeContext = createContext<{
+  choice: ThemeChoice;
+  resolved: 'light' | 'dark';
+  setChoice: (c: ThemeChoice) => void;
+}>({
   choice: 'system',
   resolved: 'light',
   setChoice: () => undefined,
@@ -16,7 +28,13 @@ function apply(dark: boolean) {
   document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
 }
 
-export function ThemeProvider({ initialChoice, children }: { initialChoice: ThemeChoice; children: ReactNode }) {
+export function ThemeProvider({
+  initialChoice,
+  children,
+}: {
+  initialChoice: ThemeChoice;
+  children: ReactNode;
+}) {
   const [choice, setChoiceState] = useState<ThemeChoice>(initialChoice);
   const [systemDark, setSystemDark] = useState(false);
 

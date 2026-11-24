@@ -7,7 +7,10 @@ const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
 
 /** Unit length and max quantity per plan. Monthly = 30 days, yearly = 365 days (assumed default, plan Q4). */
-export const PLAN_RULES: Record<Plan, { unitMs: number; maxQty: number; label: string; unit: string }> = {
+export const PLAN_RULES: Record<
+  Plan,
+  { unitMs: number; maxQty: number; label: string; unit: string }
+> = {
   HOURLY: { unitMs: HOUR, maxQty: 24, label: 'Hourly', unit: 'hour' },
   DAILY: { unitMs: DAY, maxQty: 30, label: 'Daily', unit: 'day' },
   WEEKLY: { unitMs: 7 * DAY, maxQty: 8, label: 'Weekly', unit: 'week' },
@@ -22,10 +25,14 @@ export function planEnd(start: Date, plan: Plan, quantity: number): Date {
 }
 
 /** Multi-entry passes: the booking stays valid for re-entry until it ends (assumed default, plan Q7). */
-export const isPass = (plan: Plan) => plan === 'WEEKLY' || plan === 'MONTHLY' || plan === 'YEARLY' || plan === 'EVENT';
+export const isPass = (plan: Plan) =>
+  plan === 'WEEKLY' || plan === 'MONTHLY' || plan === 'YEARLY' || plan === 'EVENT';
 
 /** Refund % for cancelling `hoursBefore` hours before start: first rule whose threshold is met (rules sorted desc). */
-export function refundPctFor(rules: { hoursBefore: number; refundPct: number }[], hoursBefore: number): number {
+export function refundPctFor(
+  rules: { hoursBefore: number; refundPct: number }[],
+  hoursBefore: number,
+): number {
   const sorted = [...rules].sort((a, b) => b.hoursBefore - a.hoursBefore);
   return sorted.find((r) => hoursBefore >= r.hoursBefore)?.refundPct ?? 0;
 }
@@ -34,6 +41,9 @@ export const quoteSchema = z
   .object({
     locationId: z.uuid(),
     vehicleTypeId: z.uuid(),
+    zoneId: z.uuid().nullable().optional(),
+    /** A named slot on the floor (P01…); implies its floor. */
+    slotId: z.uuid().nullable().optional(),
     planType: z.enum(PLAN_TYPES),
     startAt: z.coerce.date(),
     quantity: z.coerce.number().int().min(1).default(1),
@@ -48,6 +58,10 @@ export const bookingCreateSchema = z
   .object({
     locationId: z.uuid(),
     vehicleId: z.uuid('Choose a vehicle'),
+    /** Floor/zone to park on; omitted or null = any floor. */
+    zoneId: z.uuid().nullable().optional(),
+    /** A named slot on the floor (P01…); implies its floor. */
+    slotId: z.uuid().nullable().optional(),
     planType: z.enum(PLAN_TYPES),
     startAt: z.coerce.date(),
     quantity: z.coerce.number().int().min(1).default(1),
@@ -58,17 +72,26 @@ export const bookingCreateSchema = z
   });
 export type BookingCreateInput = z.input<typeof bookingCreateSchema>;
 
-export const extendSchema = z.object({ quantity: z.coerce.number().int().min(1).max(30).default(1) });
+export const extendSchema = z.object({
+  quantity: z.coerce.number().int().min(1).max(30).default(1),
+});
 
-export const bookingListSchema = z.object({ tab: z.enum(['upcoming', 'active', 'past']).default('upcoming') });
+export const bookingListSchema = z.object({
+  tab: z.enum(['upcoming', 'active', 'past']).default('upcoming'),
+});
 
 export const cancelSchema = z.object({ reason: z.string().trim().max(300).optional() });
 
-export const disputeCreateSchema = z.object({ reason: z.string().trim().min(10, 'Tell us what went wrong (10+ characters)').max(1000) });
+export const disputeCreateSchema = z.object({
+  reason: z.string().trim().min(10, 'Tell us what went wrong (10+ characters)').max(1000),
+});
 export type DisputeCreateInput = z.input<typeof disputeCreateSchema>;
 
 export const paymentOrderSchema = z.object({ bookingId: z.uuid() });
-export const mockPaySchema = z.object({ orderId: z.string().min(1), outcome: z.enum(['success', 'failure']).default('success') });
+export const mockPaySchema = z.object({
+  orderId: z.string().min(1),
+  outcome: z.enum(['success', 'failure']).default('success'),
+});
 
 export const scanSchema = z.object({
   token: z.string().trim().min(4).max(300),

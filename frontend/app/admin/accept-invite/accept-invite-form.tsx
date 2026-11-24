@@ -11,13 +11,17 @@ import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
 import { api, session, type AuthResult } from '@/shared/lib/api';
 import { applyApiError } from '@/shared/lib/form-errors';
+import { ErrorPopup } from '@/shared/ui/confirm-dialog';
 
 const schema = z.object({ name: nameSchema, password: passwordSchema });
 
 export function AcceptInviteForm() {
   const token = useSearchParams().get('token') ?? '';
   const router = useRouter();
-  const form = useForm<z.infer<typeof schema>>({ resolver: zodResolver(schema), defaultValues: { name: '', password: '' } });
+  const form = useForm<z.infer<typeof schema>>({
+    resolver: zodResolver(schema),
+    defaultValues: { name: '', password: '' },
+  });
   const { errors, isSubmitting } = form.formState;
 
   const onSubmit = form.handleSubmit(async (values) => {
@@ -33,7 +37,7 @@ export function AcceptInviteForm() {
   if (!token) return <Alert variant="destructive">This link is missing its token.</Alert>;
   return (
     <form onSubmit={onSubmit} className="grid gap-4" noValidate>
-      {errors.root && <Alert variant="destructive">{errors.root.message}</Alert>}
+      <ErrorPopup message={errors.root?.message} onClose={() => form.clearErrors('root')} />
       <FormField label="Your name" error={errors.name?.message}>
         <Input autoComplete="name" {...form.register('name')} />
       </FormField>

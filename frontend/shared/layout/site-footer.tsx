@@ -7,9 +7,30 @@ import { useT } from '@/shared/i18n/i18n';
 import type { MessageKey } from '@/shared/i18n/messages';
 
 const COLUMNS: { title: MessageKey; links: { href: string; label: MessageKey }[] }[] = [
-  { title: 'footer.drivers', links: [{ href: '/search', label: 'footer.findParking' }, { href: '/vehicle-owner/bookings', label: 'footer.myBookings' }, { href: '/vehicle-owner/vehicles', label: 'footer.myVehicles' }] },
-  { title: 'footer.owners', links: [{ href: '/register?role=PARKING_OWNER', label: 'footer.listParking' }, { href: '/parking-owner', label: 'footer.ownerDashboard' }, { href: '/parking-owner/scanner', label: 'footer.gateScanner' }] },
-  { title: 'footer.account', links: [{ href: '/login', label: 'nav.signIn' }, { href: '/register', label: 'nav.createAccount' }, { href: '/account', label: 'footer.profile' }] },
+  {
+    title: 'footer.drivers',
+    links: [
+      { href: '/search', label: 'footer.findParking' },
+      { href: '/vehicle-owner/bookings', label: 'footer.myBookings' },
+      { href: '/vehicle-owner/vehicles', label: 'footer.myVehicles' },
+    ],
+  },
+  {
+    title: 'footer.owners',
+    links: [
+      { href: '/register?role=PARKING_OWNER', label: 'footer.listParking' },
+      { href: '/parking-owner', label: 'footer.ownerDashboard' },
+      { href: '/parking-owner/scanner', label: 'footer.gateScanner' },
+    ],
+  },
+  {
+    title: 'footer.account',
+    links: [
+      { href: '/login', label: 'nav.signIn' },
+      { href: '/register', label: 'nav.createAccount' },
+      { href: '/account', label: 'footer.profile' },
+    ],
+  },
 ];
 
 export function SiteFooter() {
@@ -34,11 +55,16 @@ export function SiteFooter() {
         </div>
         {COLUMNS.map((c) => (
           <div key={c.title} className="grid content-start gap-3">
-            <p className="text-[11px] font-semibold tracking-[0.14em] text-gold-light uppercase">{t(c.title)}</p>
+            <p className="text-[11px] font-semibold tracking-[0.14em] text-gold-light uppercase">
+              {t(c.title)}
+            </p>
             <ul className="grid gap-2 text-sm">
               {c.links.map((l) => (
                 <li key={l.href}>
-                  <Link href={l.href} className="text-chrome-foreground/80 transition-colors hover:text-white">
+                  <Link
+                    href={l.href}
+                    className="text-chrome-foreground/80 transition-colors hover:text-white"
+                  >
                     {t(l.label)}
                   </Link>
                 </li>
@@ -48,7 +74,9 @@ export function SiteFooter() {
         ))}
       </div>
       <div className="border-t border-white/10">
-        <p className="mx-auto max-w-6xl px-4 py-5 text-xs text-chrome-muted">{t('footer.copyright', { year: new Date().getFullYear() })}</p>
+        <p className="mx-auto max-w-6xl px-4 py-5 text-xs text-chrome-muted">
+          {t('footer.copyright', { year: new Date().getFullYear() })}
+        </p>
       </div>
     </footer>
   );

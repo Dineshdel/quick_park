@@ -13,7 +13,15 @@ const PERKS: { icon: typeof Car; text: MessageKey }[] = [
 ];
 
 /** Sign-in / sign-up frame: a midnight brand panel beside the form on large screens. */
-export function AuthCard({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
+export function AuthCard({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: ReactNode;
+}) {
   const t = useT();
   return (
     <div className="mx-auto grid w-full max-w-5xl gap-8 px-4 py-10 lg:grid-cols-[1fr_440px] lg:items-center lg:py-16">

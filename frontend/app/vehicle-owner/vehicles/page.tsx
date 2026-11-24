@@ -19,11 +19,13 @@ import { api, ApiError } from '@/shared/lib/api';
 import { applyApiError } from '@/shared/lib/form-errors';
 import { useVehicles, useVehicleTypes, VEHICLES_KEY } from '../_components/use-vehicles';
 import { VehicleIcon } from '../_components/vehicle-icon';
+import { ErrorPopup, useConfirm } from '@/shared/ui/confirm-dialog';
 
 type FormOut = z.output<typeof vehicleCreateSchema>;
 const EMPTY: VehicleCreateInput = { vehicleTypeId: '', plateNumber: '' };
 
 export default function VehiclesPage() {
+  const ask = useConfirm();
   const qc = useQueryClient();
   const vehicles = useVehicles();
   const types = useVehicleTypes();
@@ -31,16 +33,28 @@ export default function VehiclesPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [rowError, setRowError] = useState<string | null>(null);
 
-  const form = useForm<VehicleCreateInput, unknown, FormOut>({ resolver: zodResolver(vehicleCreateSchema), defaultValues: EMPTY });
+  const form = useForm<VehicleCreateInput, unknown, FormOut>({
+    resolver: zodResolver(vehicleCreateSchema),
+    defaultValues: EMPTY,
+  });
   const { errors, isSubmitting } = form.formState;
 
   const startEdit = (v: VehicleDto | null) => {
     setEditing(v);
     setNotice(null);
-    form.reset(v ? { vehicleTypeId: v.vehicleType.id, plateNumber: formatPlate(v.plateNumber) } : EMPTY);
+    form.reset(
+      v ? { vehicleTypeId: v.vehicleType.id, plateNumber: formatPlate(v.plateNumber) } : EMPTY,
+    );
   };
 
   const onSubmit = form.handleSubmit(async (values) => {
+    if (
+      !(await ask({
+        title: editing ? 'Save vehicle changes?' : `Add ${values.plateNumber}?`,
+        confirmLabel: editing ? 'Save' : 'Add vehicle',
+      }))
+    )
+      return;
     try {
       if (editing) {
         await api(`/vehicles/${editing.id}`, { method: 'PATCH', body: values });
@@ -67,10 +81,13 @@ export default function VehiclesPage() {
   const atLimit = (vehicles.data?.length ?? 0) >= MAX_VEHICLES_PER_USER;
 
   return (
-    <PageShell title="My vehicles" description="Add the vehicles you park. Each one gets a QR sticker you can print and stick on the windscreen.">
+    <PageShell
+      title="My vehicles"
+      description="Add the vehicles you park. Each one gets a QR sticker you can print and stick on the windscreen."
+    >
       <div className="grid items-start gap-6 lg:grid-cols-[1fr_340px]">
         <div className="grid gap-3">
-          {rowError && <Alert variant="destructive">{rowError}</Alert>}
+          <ErrorPopup message={rowError} onClose={() => setRowError(null)} />
           {vehicles.isPending ? (
             <p className="text-sm text-muted-foreground">Loading…</p>
           ) : vehicles.isError ? (
@@ -89,7 +106,9 @@ export default function VehiclesPage() {
                     <VehicleIcon name={v.vehicleType.icon} className="size-5" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="font-mono text-lg font-semibold tracking-wide">{formatPlate(v.plateNumber)}</p>
+                    <p className="font-mono text-lg font-semibold tracking-wide">
+                      {formatPlate(v.plateNumber)}
+                    </p>
                     <p className="text-sm text-muted-foreground">{v.vehicleType.name}</p>
                   </div>
                   <div className="flex flex-wrap gap-1">
@@ -107,7 +126,14 @@ export default function VehiclesPage() {
                       className="text-destructive"
                       disabled={remove.isPending}
                       onClick={() => {
-                        if (confirm(`Remove ${formatPlate(v.plateNumber)}? Its QR sticker will stop working.`)) remove.mutate(v);
+                        void ask({
+                          title: `Remove ${formatPlate(v.plateNumber)}?`,
+                          description: 'Its QR sticker will stop working.',
+                          confirmLabel: 'Remove',
+                          tone: 'danger',
+                        }).then((ok) => {
+                          if (ok) void remove.mutate(v);
+                        });
                       }}
                     >
                       Remove
@@ -125,10 +151,15 @@ export default function VehiclesPage() {
           </CardHeader>
           <CardContent>
             {atLimit && !editing ? (
-              <Alert>You can add up to {MAX_VEHICLES_PER_USER} vehicles. Remove one to add another.</Alert>
+              <Alert>
+                You can add up to {MAX_VEHICLES_PER_USER} vehicles. Remove one to add another.
+              </Alert>
             ) : (
               <form onSubmit={onSubmit} className="grid gap-4" noValidate>
-                {errors.root && <Alert variant="destructive">{errors.root.message}</Alert>}
+                <ErrorPopup
+                  message={errors.root?.message}
+                  onClose={() => form.clearErrors('root')}
+                />
                 {notice && <Alert variant="success">{notice}</Alert>}
                 <FormField label="Vehicle type" error={errors.vehicleTypeId?.message}>
                   <select
@@ -144,8 +175,17 @@ export default function VehiclesPage() {
                     ))}
                   </select>
                 </FormField>
-                <FormField label="Number plate" error={errors.plateNumber?.message} hint="e.g. TN 09 AB 1234">
-                  <Input autoCapitalize="characters" autoComplete="off" className="font-mono uppercase" {...form.register('plateNumber')} />
+                <FormField
+                  label="Number plate"
+                  error={errors.plateNumber?.message}
+                  hint="e.g. TN 09 AB 1234"
+                >
+                  <Input
+                    autoCapitalize="characters"
+                    autoComplete="off"
+                    className="font-mono uppercase"
+                    {...form.register('plateNumber')}
+                  />
                 </FormField>
                 <div className="flex gap-2">
                   <Button type="submit" loading={isSubmitting}>

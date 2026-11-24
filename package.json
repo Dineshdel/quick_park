@@ -19,7 +19,8 @@
     "db:deploy": "pnpm --filter @qp/backend db:deploy",
     "db:studio": "pnpm --filter @qp/backend db:studio",
     "dev:backend": "pnpm --filter @qp/backend dev",
-    "dev:frontend": "pnpm --filter @qp/frontend dev"
+    "dev:frontend": "pnpm --filter @qp/frontend dev",
+    "dev:mobile": "pnpm --filter @qp/mobile start"
   },
   "devDependencies": {
     "@eslint/js": "9.39.5",

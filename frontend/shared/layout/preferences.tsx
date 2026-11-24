@@ -1,91 +1,106 @@
 'use client';
 
-import { Check, Languages, Monitor, Moon, Sun } from 'lucide-react';
+import { Check, ChevronDown, Languages, Moon, Sun } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useI18n } from '@/shared/i18n/i18n';
-import { isLocale, LOCALES } from '@/shared/i18n/messages';
+import { LOCALES } from '@/shared/i18n/messages';
 import { cn } from '@/shared/lib/utils';
-import { type ThemeChoice, useTheme } from '@/shared/theme/theme';
+import { useTheme } from '@/shared/theme/theme';
 
-const CHROME_BTN = 'inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-sm text-chrome-foreground transition-colors hover:bg-chrome-hover hover:text-white';
+const CHROME_BTN =
+  'inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-sm text-chrome-foreground transition-colors hover:bg-chrome-hover hover:text-white';
 
-/** Language picker for the header: a native select (works with screen readers and on phones). */
-export function LanguageSelect() {
-  const { locale, setLocale, t } = useI18n();
-  return (
-    <label className={cn(CHROME_BTN, 'relative cursor-pointer')} title={t('ui.language')}>
-      <Languages className="size-4" aria-hidden />
-      <span className="hidden sm:inline">{LOCALES.find((l) => l.code === locale)?.label}</span>
-      <span className="sm:hidden">{LOCALES.find((l) => l.code === locale)?.short}</span>
-      <select
-        aria-label={t('ui.language')}
-        value={locale}
-        onChange={(e) => isLocale(e.target.value) && setLocale(e.target.value)}
-        className="absolute inset-0 cursor-pointer opacity-0"
-      >
-        {LOCALES.map((l) => (
-          <option key={l.code} value={l.code}>
-            {l.label}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
-}
-
-const THEME_OPTIONS: { value: ThemeChoice; icon: typeof Sun; key: 'ui.theme.light' | 'ui.theme.dark' | 'ui.theme.system' }[] = [
-  { value: 'light', icon: Sun, key: 'ui.theme.light' },
-  { value: 'dark', icon: Moon, key: 'ui.theme.dark' },
-  { value: 'system', icon: Monitor, key: 'ui.theme.system' },
-];
-
-/** Day / night / follow-the-device switch for the header. */
-export function ThemeMenu() {
-  const { choice, resolved, setChoice } = useTheme();
-  const { t } = useI18n();
-  const [open, setOpen] = useState(false);
+/** Closes a popup on outside click or Escape. */
+function useDismiss(open: boolean, close: () => void) {
   const ref = useRef<HTMLDivElement>(null);
-
   useEffect(() => {
     if (!open) return;
-    const close = (e: MouseEvent | KeyboardEvent) => {
-      if (e instanceof KeyboardEvent ? e.key === 'Escape' : !ref.current?.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', close);
-    document.addEventListener('keydown', close);
+    const onDown = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && close();
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && close();
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
     return () => {
-      document.removeEventListener('mousedown', close);
-      document.removeEventListener('keydown', close);
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
     };
-  }, [open]);
+  }, [open, close]);
+  return ref;
+}
 
-  const Icon = resolved === 'dark' ? Moon : Sun;
+/** Language picker for the header: a menu in the header's navy, not the browser's white list. */
+export function LanguageSelect() {
+  const { locale, setLocale, t } = useI18n();
+  const [open, setOpen] = useState(false);
+  const ref = useDismiss(open, () => setOpen(false));
+  const current = LOCALES.find((l) => l.code === locale);
+
   return (
     <div ref={ref} className="relative">
-      <button type="button" className={CHROME_BTN} aria-haspopup="menu" aria-expanded={open} aria-label={t('ui.theme')} title={t('ui.theme')} onClick={() => setOpen((v) => !v)}>
-        <Icon className="size-4" aria-hidden />
+      <button
+        type="button"
+        className={CHROME_BTN}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={t('ui.language')}
+        title={t('ui.language')}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <Languages className="size-4" aria-hidden />
+        <span className="hidden sm:inline">{current?.label}</span>
+        <span className="sm:hidden">{current?.short}</span>
+        <ChevronDown
+          className={cn('size-3.5 opacity-70 transition-transform', open && 'rotate-180')}
+          aria-hidden
+        />
       </button>
       {open && (
-        <div role="menu" className="shadow-premium-lg absolute right-0 mt-2 w-44 overflow-hidden rounded-xl border bg-card p-1 text-card-foreground">
-          {THEME_OPTIONS.map((o) => (
+        <div
+          role="menu"
+          aria-label={t('ui.language')}
+          className="absolute right-0 z-50 mt-2 w-44 overflow-hidden rounded-xl border border-white/10 bg-chrome p-1 text-chrome-foreground shadow-xl"
+        >
+          {LOCALES.map((l) => (
             <button
-              key={o.value}
+              key={l.code}
               type="button"
               role="menuitemradio"
-              aria-checked={choice === o.value}
+              aria-checked={l.code === locale}
               onClick={() => {
-                setChoice(o.value);
+                setLocale(l.code);
                 setOpen(false);
               }}
-              className={cn('flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm hover:bg-accent', choice === o.value && 'font-medium')}
+              className={cn(
+                'flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-chrome-hover hover:text-white',
+                l.code === locale && 'bg-chrome-hover font-medium text-white',
+              )}
             >
-              <o.icon className="size-4 text-muted-foreground" aria-hidden />
-              <span className="flex-1">{t(o.key)}</span>
-              {choice === o.value && <Check className="size-4 text-gold-deep" aria-hidden />}
+              <span className="w-6 text-xs text-chrome-muted">{l.short}</span>
+              <span className="flex-1">{l.label}</span>
+              {l.code === locale && <Check className="size-4 text-gold" aria-hidden />}
             </button>
           ))}
         </div>
       )}
     </div>
+  );
+}
+
+/** One-click day / night switch: the icon shows the mode you switch to. */
+export function ThemeToggle() {
+  const { resolved, setChoice } = useTheme();
+  const { t } = useI18n();
+  const next = resolved === 'dark' ? 'light' : 'dark';
+  const label = `${t('ui.theme')}: ${t(next === 'dark' ? 'ui.theme.dark' : 'ui.theme.light')}`;
+  const Icon = next === 'dark' ? Moon : Sun;
+  return (
+    <button
+      type="button"
+      className={CHROME_BTN}
+      aria-label={label}
+      title={label}
+      onClick={() => setChoice(next)}
+    >
+      <Icon className="size-4" aria-hidden />
+    </button>
   );
 }

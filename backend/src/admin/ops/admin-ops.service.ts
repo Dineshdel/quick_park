@@ -18,6 +18,7 @@ import { RealtimeGateway } from '../../shared/realtime/realtime.gateway';
 import { MoneyService } from '../../shared/reports/money.service';
 import { toPayoutDto } from '../../parking-owner/bookings/owner-bookings.service';
 
+const OWNER_SUSPENDED_NOTE = 'Owner account suspended';
 const badState = (m: string) => new AppException(HttpStatus.CONFLICT, 'INVALID_STATE', m);
 type Out<S extends z.ZodType> = z.output<S>;
 
@@ -200,12 +201,22 @@ export class AdminOpsService {
     if (status === 'SUSPENDED') await this.sessions.revokeAllForUser(userId);
     await this.authCache.invalidate(userId);
     await this.audit.log(adminId, `user.${status.toLowerCase()}`, 'user', userId);
-    // A suspended owner can't run the gate, so their live places are suspended too (reinstate them one by one later).
+    // A suspended owner can't run the gate, so their live places are suspended too. Reactivating the owner
+    // reinstates only the places that were suspended because of the account (not ones an admin suspended separately).
+    if (status === 'ACTIVE' && u.role === 'PARKING_OWNER') {
+      const places = await this.prisma.parkingLocation.findMany({ where: { owner: { userId }, status: 'SUSPENDED', rejectionReason: OWNER_SUSPENDED_NOTE }, select: { id: true } });
+      if (places.length) {
+        const ids = places.map((p) => p.id);
+        await this.prisma.parkingLocation.updateMany({ where: { id: { in: ids } }, data: { status: 'ACTIVE', rejectionReason: null } });
+        await this.audit.log(adminId, 'location.reinstate', 'location', ids[0] ?? null, { locationIds: ids, reason: 'Owner account reactivated' });
+        return { ok: true, placesReinstated: ids.length };
+      }
+    }
     if (status === 'SUSPENDED' && u.role === 'PARKING_OWNER') {
       const places = await this.prisma.parkingLocation.findMany({ where: { owner: { userId }, status: 'ACTIVE' }, select: { id: true } });
       if (places.length) {
         const ids = places.map((p) => p.id);
-        await this.prisma.parkingLocation.updateMany({ where: { id: { in: ids } }, data: { status: 'SUSPENDED', rejectionReason: 'Owner account suspended' } });
+        await this.prisma.parkingLocation.updateMany({ where: { id: { in: ids } }, data: { status: 'SUSPENDED', rejectionReason: OWNER_SUSPENDED_NOTE } });
         return { ok: true, placesSuspended: ids.length, ...(await this.cancelForSuspension(ids, adminId, 'Parking owner account suspended')) };
       }
     }

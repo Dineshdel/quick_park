@@ -20,6 +20,8 @@ export const bookingInclude = {
   },
   vehicle: { select: { id: true, plateNumber: true } },
   vehicleType: { select: { id: true, code: true, name: true } },
+  zone: { select: { id: true, name: true, area: { select: { name: true } } } },
+  slot: { select: { id: true, label: true } },
   refunds: { where: { status: 'PROCESSED' }, select: { amountPaise: true } },
 } satisfies Prisma.BookingInclude;
 type Row = Prisma.BookingGetPayload<{ include: typeof bookingInclude }>;
@@ -41,6 +43,8 @@ export const toBookingDto = (b: Row): BookingDto => ({
   location: b.location,
   vehicle: b.vehicle,
   vehicleType: b.vehicleType,
+  zone: b.zone ? { id: b.zone.id, name: b.zone.name, areaName: b.zone.area.name } : null,
+  slot: b.slot,
   refundedPaise: b.refunds.reduce((s, r) => s + r.amountPaise, 0),
   createdAt: b.createdAt.toISOString(),
 });
@@ -72,9 +76,25 @@ const slotUnavailable = () =>
     'No slots left for that time. Try another time or place.',
   );
 
+const floorUnavailable = () =>
+  new AppException(
+    HttpStatus.CONFLICT,
+    'SLOT_UNAVAILABLE',
+    'That floor is full for this time. Pick another floor or "Any floor".',
+  );
+
+const slotTaken = (label: string) =>
+  new AppException(
+    HttpStatus.CONFLICT,
+    'SLOT_UNAVAILABLE',
+    `Slot ${label} is taken for this time. Pick another slot or "Any free slot".`,
+  );
+
 export interface CreateArgs extends z.output<typeof bookingCreateSchema> {
   idempotencyKey: string;
   extendedFromId?: string;
+  /** Extensions try to keep the same slot but take another free one on the floor if it's gone. */
+  slotFallback?: boolean;
 }
 
 /** Customer bookings (plan M7). */
@@ -109,6 +129,18 @@ export class BookingsService {
       throw Errors.badRequest('VALIDATION_FAILED', 'Choose one of your vehicles', [
         { path: 'vehicleId', message: 'Choose one of your vehicles' },
       ]);
+    let wantedSlot: { id: string; label: string } | null = null;
+    if (a.slotId) {
+      const slot = await this.prisma.parkingSlot.findFirst({
+        where: { id: a.slotId, locationId: a.locationId, vehicleTypeId: vehicle.vehicleTypeId },
+      });
+      if (!slot || (!slot.isOnline && !a.slotFallback) || (a.zoneId && a.zoneId !== slot.zoneId))
+        throw Errors.badRequest('VALIDATION_FAILED', 'That slot can’t be booked for this vehicle', [
+          { path: 'slotId', message: 'Choose another slot' },
+        ]);
+      a = { ...a, zoneId: slot.zoneId };
+      wantedSlot = { id: slot.id, label: slot.label };
+    }
     const settings = await this.masters.settings();
     // Unpaid holds block real slots, so one account can't hoard a place with many of them.
     const holds = await this.prisma.booking.count({
@@ -132,6 +164,7 @@ export class BookingsService {
               planType: a.planType,
               startAt: a.startAt,
               quantity: a.quantity,
+              zoneId: a.zoneId ?? null,
             },
             tx,
           );
@@ -142,8 +175,24 @@ export class BookingsService {
             p.startAt,
             p.endAt,
             tx,
+            undefined,
+            a.zoneId ?? null,
           );
-          if (free < 1) throw slotUnavailable();
+          if (free < 1) throw a.zoneId ? floorUnavailable() : slotUnavailable();
+          // Floors with named slots: the chosen slot, or the first free one ("Any free slot").
+          const slotId = a.zoneId
+            ? await this.availability.pickSlot(
+                tx,
+                a.zoneId,
+                vehicle.vehicleTypeId,
+                p.startAt,
+                p.endAt,
+                wantedSlot?.id,
+                !wantedSlot || !!a.slotFallback,
+              )
+            : undefined;
+          if (slotId === null)
+            throw wantedSlot && !a.slotFallback ? slotTaken(wantedSlot.label) : floorUnavailable();
           const clash = await tx.booking.findFirst({
             where: {
               vehicleId: vehicle.id,
@@ -177,13 +226,18 @@ export class BookingsService {
               vehicleId: vehicle.id,
               locationId: a.locationId,
               vehicleTypeId: vehicle.vehicleTypeId,
+              zoneId: a.zoneId ?? null,
+              slotId: slotId ?? null,
               planType: a.planType,
               quantity: p.quantity,
               startAt: p.startAt,
               endAt: p.endAt,
               amountPaise: p.amountPaise,
               commissionPaise: Math.round((p.amountPaise * pct) / 100),
-              holdExpiresAt: new Date(Date.now() + settings.holdMinutes * 60_000),
+              // Nothing to pay (free place): confirmed straight away, no payment hold.
+              ...(p.amountPaise === 0
+                ? { status: 'CONFIRMED' as const, confirmedAt: new Date(), holdExpiresAt: null }
+                : { holdExpiresAt: new Date(Date.now() + settings.holdMinutes * 60_000) }),
               idempotencyKey: a.idempotencyKey,
               extendedFromId: a.extendedFromId ?? null,
               cancellationRules: (policy?.rules ?? [
@@ -195,6 +249,7 @@ export class BookingsService {
         }),
       );
       await this.realtime.publish(booking.locationId, booking.vehicleTypeId);
+      if (booking.status === 'CONFIRMED') await this.notify.bookingConfirmed(booking.id);
       return { booking: toBookingDto(booking), created: true };
     } catch (e) {
       // A parallel request with the same key won the race: return its booking.
@@ -242,7 +297,19 @@ export class BookingsService {
   }
 
   async get(userId: string, id: string) {
-    return toBookingDto(await this.find(userId, id));
+    const b = await this.find(userId, id);
+    const dto = toBookingDto(b);
+    // Hourly/daily bookings not checked in yet: the slot is released if the vehicle isn't in by this time.
+    const { noShowReleaseMinutes } = await this.masters.settings();
+    if (
+      noShowReleaseMinutes > 0 &&
+      b.status === 'CONFIRMED' &&
+      (b.planType === 'HOURLY' || b.planType === 'DAILY') &&
+      !b.extendedFromId
+    ) {
+      dto.checkInBy = new Date(b.startAt.getTime() + noShowReleaseMinutes * 60_000).toISOString();
+    }
+    return dto;
   }
 
   /**
@@ -319,6 +386,9 @@ export class BookingsService {
     return this.create(userId, {
       locationId: b.locationId,
       vehicleId: b.vehicleId,
+      zoneId: b.zoneId,
+      slotId: b.slotId,
+      slotFallback: true,
       planType: b.planType,
       startAt: lastInChain,
       quantity,

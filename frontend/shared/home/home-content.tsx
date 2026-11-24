@@ -37,9 +37,7 @@ export function HomeContent() {
             <span className="text-gold-gradient italic">{t('home.titleAccent')}</span>
             {t('home.titleAfter')}
           </h1>
-          <p className="mx-auto max-w-xl text-lg text-chrome-muted">
-            {t('home.subtitle')}
-          </p>
+          <p className="mx-auto max-w-xl text-lg text-chrome-muted">{t('home.subtitle')}</p>
           <ul className="mx-auto mt-2 flex flex-wrap justify-center gap-x-8 gap-y-2 text-sm text-chrome-foreground/80">
             {HIGHLIGHTS.map((h) => (
               <li key={h.text} className="flex items-center gap-2">
@@ -59,13 +57,21 @@ export function HomeContent() {
 
         <section className="grid gap-6">
           <div className="grid gap-2 text-center">
-            <p className="text-[11px] font-semibold tracking-[0.16em] text-gold-deep uppercase">{t('home.stepsKicker')}</p>
+            <p className="text-[11px] font-semibold tracking-[0.16em] text-gold-deep uppercase">
+              {t('home.stepsKicker')}
+            </p>
             <h2 className="font-serif text-3xl font-semibold">{t('home.stepsTitle')}</h2>
           </div>
           <div className="grid gap-5 sm:grid-cols-3">
             {STEPS.map((s, i) => (
-              <div key={s.title} className="group shadow-premium relative grid gap-3 overflow-hidden rounded-2xl border bg-card p-7 transition-all hover:-translate-y-0.5 hover:shadow-premium-lg">
-                <span className="bg-gold-gradient absolute inset-x-0 top-0 h-0.5 opacity-0 transition-opacity group-hover:opacity-100" aria-hidden />
+              <div
+                key={s.title}
+                className="group shadow-premium relative grid gap-3 overflow-hidden rounded-2xl border bg-card p-7 transition-all hover:-translate-y-0.5 hover:shadow-premium-lg"
+              >
+                <span
+                  className="bg-gold-gradient absolute inset-x-0 top-0 h-0.5 opacity-0 transition-opacity group-hover:opacity-100"
+                  aria-hidden
+                />
                 <div className="flex items-center justify-between gap-3">
                   <span className="bg-midnight flex size-11 items-center justify-center rounded-xl text-gold-light shadow-md shadow-primary/20">
                     <s.icon className="size-5" aria-hidden />

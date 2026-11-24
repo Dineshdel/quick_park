@@ -7,10 +7,14 @@ import { formatRupees } from '@/shared/lib/format';
 import { Alert } from '@/shared/ui/alert';
 import { Button } from '@/shared/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/ui/card';
+import { ErrorPopup, useConfirm } from '@/shared/ui/confirm-dialog';
 
 declare global {
   interface Window {
-    Razorpay?: new (opts: Record<string, unknown>) => { open: () => void; on: (e: string, cb: () => void) => void };
+    Razorpay?: new (opts: Record<string, unknown>) => {
+      open: () => void;
+      on: (e: string, cb: () => void) => void;
+    };
   }
 }
 
@@ -29,7 +33,18 @@ function loadRazorpay(): Promise<void> {
  * Pays a held booking. Razorpay: opens Checkout; the booking is confirmed by the server webhook, so afterwards we
  * poll the booking. Mock (development): shows buttons that simulate success or failure.
  */
-export function Checkout({ bookingId, amountPaise, holdExpiresAt, onDone }: { bookingId: string; amountPaise: number; holdExpiresAt: string | null; onDone: () => void }) {
+export function Checkout({
+  bookingId,
+  amountPaise,
+  holdExpiresAt,
+  onDone,
+}: {
+  bookingId: string;
+  amountPaise: number;
+  holdExpiresAt: string | null;
+  onDone: () => void;
+}) {
+  const ask = useConfirm();
   const [order, setOrder] = useState<PaymentOrderDto | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -47,6 +62,14 @@ export function Checkout({ bookingId, amountPaise, holdExpiresAt, onDone }: { bo
   };
 
   const start = async () => {
+    if (
+      !(await ask({
+        title: `Pay ${formatRupees(amountPaise)}?`,
+        description: 'The payment window opens next.',
+        confirmLabel: 'Pay now',
+      }))
+    )
+      return;
     setBusy(true);
     setError(null);
     try {
@@ -94,11 +117,15 @@ export function Checkout({ bookingId, amountPaise, holdExpiresAt, onDone }: { bo
       <CardHeader>
         <CardTitle className="text-lg">Pay {formatRupees(amountPaise)} to confirm</CardTitle>
         <CardDescription>
-          Your slot is held{holdExpiresAt ? ` until ${new Date(holdExpiresAt).toLocaleTimeString('en-IN', { timeStyle: 'short' })}` : ''}. Unpaid holds are released automatically.
+          Your slot is held
+          {holdExpiresAt
+            ? ` until ${new Date(holdExpiresAt).toLocaleTimeString('en-IN', { timeStyle: 'short' })}`
+            : ''}
+          . Unpaid holds are released automatically.
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-3">
-        {error && <Alert variant="destructive">{error}</Alert>}
+        <ErrorPopup message={error} onClose={() => setError(null)} />
         {waiting ? (
           <Alert>Confirming your payment…</Alert>
         ) : order?.provider === 'mock' ? (

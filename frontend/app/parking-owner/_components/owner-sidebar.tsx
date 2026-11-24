@@ -1,6 +1,14 @@
 'use client';
 
-import { BadgeCheck, Building2, CalendarCheck, IndianRupee, LayoutDashboard, MapPin, ScanLine } from 'lucide-react';
+import {
+  BadgeCheck,
+  Building2,
+  CalendarCheck,
+  IndianRupee,
+  LayoutDashboard,
+  MapPin,
+  ScanLine,
+} from 'lucide-react';
 import { useT } from '@/shared/i18n/i18n';
 import { RoleSidebar } from '@/shared/layout/role-sidebar';
 

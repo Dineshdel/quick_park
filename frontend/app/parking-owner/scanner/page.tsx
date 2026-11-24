@@ -1,6 +1,6 @@
 'use client';
 
-import type { ScanResultDto, SessionDto } from '@qp/types';
+import type { ChargeBreakdownDto, ScanResultDto, SessionDto } from '@qp/types';
 import { formatPlate } from '@qp/validation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Camera, CameraOff, LogIn, LogOut } from 'lucide-react';
@@ -17,9 +17,64 @@ import { Input } from '@/shared/ui/input';
 import { Select } from '@/shared/ui/select';
 import { Tabs } from '@/shared/ui/tabs';
 import { useOwnerLocations } from '../_components/use-owner';
+import { ErrorPopup } from '@/shared/ui/confirm-dialog';
 
 type Direction = 'ENTRY' | 'EXIT';
-type Outcome = { kind: 'ok'; result: ScanResultDto } | { kind: 'due'; result: ScanResultDto } | { kind: 'error'; message: string; walkIn?: { plateNumber: string; vehicleTypeId: string | null } };
+
+/** 97 → "1 h 37 min", 45 → "45 min". */
+const fmtDur = (min: number) =>
+  min >= 60 ? `${Math.floor(min / 60)} h ${min % 60} min` : `${min} min`;
+
+/** How the check-out amount was worked out: booked until, free grace, late by, hours × rate. */
+function ChargeBreakdown({ c }: { c: ChargeBreakdownDto }) {
+  const row = (k: string, v: React.ReactNode, strong = false) => (
+    <div className="flex items-baseline justify-between gap-4 py-1.5">
+      <dt className="text-muted-foreground">{k}</dt>
+      <dd className={strong ? 'text-base font-semibold' : 'font-medium tabular-nums'}>{v}</dd>
+    </div>
+  );
+  return (
+    <dl className="divide-y rounded-lg border bg-muted/30 px-4 py-1 text-sm">
+      {c.kind === 'OVERSTAY' ? (
+        <>
+          {row('Booked until', fmtTime(c.from))}
+          {row(
+            'Free grace',
+            `${c.graceMinutes} min (till ${fmtTime(new Date(new Date(c.from).getTime() + c.graceMinutes * 60_000).toISOString())})`,
+          )}
+          {row('Checking out', fmtTime(c.until))}
+          {row('Stayed extra', fmtDur(c.minutes))}
+        </>
+      ) : (
+        <>
+          {row('Entered', fmtTime(c.from))}
+          {row('Checking out', fmtTime(c.until))}
+          {row('Parked for', fmtDur(c.minutes))}
+        </>
+      )}
+      {row(
+        'Charged',
+        c.note?.startsWith('Daily') || c.note?.startsWith('Charged at the daily')
+          ? c.note
+          : `${c.hours} h × ${formatRupees(c.ratePerHourPaise)}/h`,
+      )}
+      {c.kind === 'OVERSTAY' && (
+        <p className="py-1.5 text-xs text-muted-foreground">
+          Every started hour counts after the free grace.
+        </p>
+      )}
+      {row('Total', formatRupees(c.amountPaise), true)}
+    </dl>
+  );
+}
+type Outcome =
+  | { kind: 'ok'; result: ScanResultDto }
+  | { kind: 'due'; result: ScanResultDto }
+  | {
+      kind: 'error';
+      message: string;
+      walkIn?: { plateNumber: string; vehicleTypeId: string | null };
+    };
 
 /** Camera QR scanner (html5-qrcode); a USB/Bluetooth scanner or the keyboard types into the text box instead. */
 function CameraScanner({ onCode }: { onCode: (code: string) => void }) {
@@ -51,7 +106,9 @@ function CameraScanner({ onCode }: { onCode: (code: string) => void }) {
           () => undefined,
         );
       } catch {
-        setErr('Camera unavailable. Allow camera access (needs HTTPS or localhost), or use the text box.');
+        setErr(
+          'Camera unavailable. Allow camera access (needs HTTPS or localhost), or use the text box.',
+        );
         setOn(false);
       }
     })();
@@ -59,16 +116,34 @@ function CameraScanner({ onCode }: { onCode: (code: string) => void }) {
       cancelled = true;
       const s = scanner.current;
       scanner.current = null;
-      if (s) void s.stop().then(() => s.clear()).catch(() => undefined);
+      if (s)
+        void s
+          .stop()
+          .then(() => s.clear())
+          .catch(() => undefined);
     };
   }, [on]);
 
   return (
     <div className="grid gap-2">
       <div id="qr-reader" className={on ? 'overflow-hidden rounded-lg border' : 'hidden'} />
-      {err && <Alert variant="destructive">{err}</Alert>}
-      <Button variant="outline" onClick={() => { setErr(null); setOn((v) => !v); }}>
-        {on ? <><CameraOff /> Stop camera</> : <><Camera /> Start camera</>}
+      <ErrorPopup message={err} onClose={() => setErr(null)} />
+      <Button
+        variant="outline"
+        onClick={() => {
+          setErr(null);
+          setOn((v) => !v);
+        }}
+      >
+        {on ? (
+          <>
+            <CameraOff /> Stop camera
+          </>
+        ) : (
+          <>
+            <Camera /> Start camera
+          </>
+        )}
       </Button>
     </div>
   );
@@ -97,7 +172,12 @@ export default function ScannerPage() {
   }, [loc, walkType]);
 
   const sessionsKey = ['sessions', locationId];
-  const sessions = useQuery({ queryKey: sessionsKey, queryFn: () => api<SessionDto[]>(`/access/sessions?locationId=${locationId}`), enabled: !!locationId, refetchInterval: 15_000 });
+  const sessions = useQuery({
+    queryKey: sessionsKey,
+    queryFn: () => api<SessionDto[]>(`/access/sessions?locationId=${locationId}`),
+    enabled: !!locationId,
+    refetchInterval: 15_000,
+  });
   const refresh = () => void qc.invalidateQueries({ queryKey: sessionsKey });
 
   const scan = useCallback(
@@ -106,14 +186,23 @@ export default function ScannerPage() {
       setBusy(true);
       setOutcome(null);
       try {
-        const r = await api<ScanResultDto>('/access/scan', { body: { token: token.trim(), locationId, direction: dir } });
+        const r = await api<ScanResultDto>('/access/scan', {
+          body: { token: token.trim(), locationId, direction: dir },
+        });
         setOutcome(r.amountDuePaise > 0 ? { kind: 'due', result: r } : { kind: 'ok', result: r });
         refresh();
       } catch (e) {
-        const walkIn = e instanceof ApiError && e.code === 'NO_BOOKING' ? (e.details as unknown as { plateNumber: string; vehicleTypeId: string | null }) : undefined;
+        const walkIn =
+          e instanceof ApiError && e.code === 'NO_BOOKING'
+            ? (e.details as unknown as { plateNumber: string; vehicleTypeId: string | null })
+            : undefined;
         if (walkIn) {
           setWalkPlate(walkIn.plateNumber);
-          if (walkIn.vehicleTypeId && loc?.capacities.some((c) => c.vehicleTypeId === walkIn.vehicleTypeId)) setWalkType(walkIn.vehicleTypeId);
+          if (
+            walkIn.vehicleTypeId &&
+            loc?.capacities.some((c) => c.vehicleTypeId === walkIn.vehicleTypeId)
+          )
+            setWalkType(walkIn.vehicleTypeId);
         }
         setOutcome({ kind: 'error', message: errorMessage(e), walkIn });
       } finally {
@@ -129,7 +218,9 @@ export default function ScannerPage() {
   const collect = async (sessionId: string, paymentMethod?: 'CASH' | 'UPI') => {
     setBusy(true);
     try {
-      const r = await api<ScanResultDto>(`/access/sessions/${sessionId}/exit`, { body: paymentMethod ? { paymentMethod } : {} });
+      const r = await api<ScanResultDto>(`/access/sessions/${sessionId}/exit`, {
+        body: paymentMethod ? { paymentMethod } : {},
+      });
       setOutcome({ kind: 'ok', result: r });
       refresh();
     } catch (e) {
@@ -142,7 +233,9 @@ export default function ScannerPage() {
   const walkIn = async () => {
     setBusy(true);
     try {
-      const r = await api<ScanResultDto>('/access/walk-in', { body: { locationId, vehicleTypeId: walkType, plateNumber: walkPlate } });
+      const r = await api<ScanResultDto>('/access/walk-in', {
+        body: { locationId, vehicleTypeId: walkType, plateNumber: walkPlate },
+      });
       setOutcome({ kind: 'ok', result: r });
       setWalkPlate('');
       refresh();
@@ -153,31 +246,66 @@ export default function ScannerPage() {
     }
   };
 
-  if (locs.isPending) return <PageShell title="Gate scanner"><p className="text-sm text-muted-foreground">Loading…</p></PageShell>;
-  if (!active.length) return <PageShell title="Gate scanner"><Alert>You need an approved, active place to use the scanner.</Alert></PageShell>;
+  if (locs.isPending)
+    return (
+      <PageShell title="Gate scanner">
+        <p className="text-sm text-muted-foreground">Loading…</p>
+      </PageShell>
+    );
+  if (!active.length)
+    return (
+      <PageShell title="Gate scanner">
+        <Alert>You need an approved, active place to use the scanner.</Alert>
+      </PageShell>
+    );
 
   return (
-    <PageShell title="Gate scanner" description="Scan the customer's pass or vehicle sticker with the camera or a USB/Bluetooth scanner, or type the booking code or number plate.">
+    <PageShell
+      title="Gate scanner"
+      description="Scan the customer's pass or vehicle sticker with the camera or a USB/Bluetooth scanner, or type the booking code or number plate."
+    >
       <div className="flex flex-wrap items-center gap-3">
-        <Select value={locationId} onChange={(e) => setLocationId(e.target.value)} className="w-64" aria-label="Place">
+        <Select
+          value={locationId}
+          onChange={(e) => setLocationId(e.target.value)}
+          className="w-64"
+          aria-label="Place"
+        >
           {active.map((l) => (
             <option key={l.id} value={l.id}>
               {l.name}
             </option>
           ))}
         </Select>
-        <Tabs value={direction} onChange={setDirection} items={[{ value: 'ENTRY', label: 'Entry' }, { value: 'EXIT', label: 'Exit' }]} />
-        <span className={`text-xs ${connected ? 'text-success' : 'text-muted-foreground'}`}>{connected ? '● Live' : '○ Connecting…'}</span>
+        <Tabs
+          value={direction}
+          onChange={setDirection}
+          items={[
+            { value: 'ENTRY', label: 'Entry' },
+            { value: 'EXIT', label: 'Exit' },
+          ]}
+        />
+        <span className={`text-xs ${connected ? 'text-success' : 'text-muted-foreground'}`}>
+          {connected ? '● Live' : '○ Connecting…'}
+        </span>
       </div>
 
       {loc && (
         <div className="flex flex-wrap gap-2">
           {loc.capacities.map((c) => {
             const l = live[c.vehicleTypeId];
-            const inside = l?.inside ?? sessions.data?.filter((s) => s.vehicleTypeName === c.vehicleTypeName).length ?? 0;
+            const inside =
+              l?.inside ??
+              sessions.data?.filter((s) => s.vehicleTypeName === c.vehicleTypeName).length ??
+              0;
             return (
-              <Badge key={c.vehicleTypeId} variant={inside >= c.totalSlots ? 'danger' : 'muted'} className="px-3 py-1 text-sm">
-                {c.vehicleTypeName}: {inside}/{c.totalSlots} inside{l ? ` · ${l.free} bookable` : ''}
+              <Badge
+                key={c.vehicleTypeId}
+                variant={inside >= c.totalSlots ? 'danger' : 'muted'}
+                className="px-3 py-1 text-sm"
+              >
+                {c.vehicleTypeName}: {inside}/{c.totalSlots} inside
+                {l ? ` · ${l.free} bookable` : ''}
               </Badge>
             );
           })}
@@ -195,40 +323,87 @@ export default function ScannerPage() {
                   void scan(text);
                 }}
               >
-                <Input ref={inputRef} autoFocus value={text} onChange={(e) => setText(e.target.value)} placeholder="Scan, or type booking code (QPAB12CD) or plate (TN09AB1234)" aria-label="Pass, sticker, booking code or number plate" autoCapitalize="characters" className="font-mono" />
+                <Input
+                  ref={inputRef}
+                  autoFocus
+                  value={text}
+                  onChange={(e) => setText(e.target.value)}
+                  placeholder="Scan, or type booking code (QPAB12CD) or plate (TN09AB1234)"
+                  aria-label="Pass, sticker, booking code or number plate"
+                  autoCapitalize="characters"
+                  className="font-mono"
+                />
                 <Button type="submit" loading={busy}>
-                  {direction === 'ENTRY' ? <LogIn /> : <LogOut />} {direction === 'ENTRY' ? 'Check in' : 'Check out'}
+                  {direction === 'ENTRY' ? <LogIn /> : <LogOut />}{' '}
+                  {direction === 'ENTRY' ? 'Check in' : 'Check out'}
                 </Button>
               </form>
               <p className="text-xs text-muted-foreground">
-                Accepted: booking pass QR, vehicle sticker QR, booking code shown under the pass, or the number plate (finds the booking for that vehicle).
+                Accepted: booking pass QR, vehicle sticker QR, booking code shown under the pass, or
+                the number plate (finds the booking for that vehicle).
               </p>
               <CameraScanner onCode={(c) => void scan(c)} />
             </CardContent>
           </Card>
 
           {outcome && (
-            <Card className={outcome.kind === 'error' ? 'border-destructive' : outcome.kind === 'due' ? 'border-amber-500' : 'border-success'}>
+            <Card
+              className={
+                outcome.kind === 'error'
+                  ? 'border-destructive'
+                  : outcome.kind === 'due'
+                    ? 'border-amber-500'
+                    : 'border-success'
+              }
+            >
               <CardContent className="grid gap-3 pt-6">
                 {outcome.kind === 'error' ? (
                   <>
                     <p className="text-lg font-semibold text-destructive">✕ {outcome.message}</p>
-                    {outcome.walkIn && <p className="text-sm">Fill the walk-in form with the details below to let the vehicle in and charge at exit.</p>}
+                    {outcome.walkIn && (
+                      <p className="text-sm">
+                        Fill the walk-in form with the details below to let the vehicle in and
+                        charge at exit.
+                      </p>
+                    )}
                   </>
                 ) : (
                   <>
-                    <p className={`text-lg font-semibold ${outcome.kind === 'due' ? 'text-amber-600' : 'text-success'}`}>{outcome.kind === 'due' ? '⚠' : '✓'} {outcome.result.message}</p>
-                    <p className="text-sm">
-                      <span className="font-mono text-base font-semibold">{formatPlate(outcome.result.plateNumber)}</span> · {outcome.result.vehicleTypeName}
-                      {outcome.result.customerName ? ` · ${outcome.result.customerName}` : ''}
-                      {outcome.result.booking ? ` · ${outcome.result.booking.code} until ${fmtTime(outcome.result.booking.endAt)}` : ''}
+                    <p
+                      className={`text-lg font-semibold ${outcome.kind === 'due' ? 'text-amber-600' : 'text-success'}`}
+                    >
+                      {outcome.kind === 'due' ? '⚠' : '✓'} {outcome.result.message}
                     </p>
+                    <p className="text-sm">
+                      <span className="font-mono text-base font-semibold">
+                        {formatPlate(outcome.result.plateNumber)}
+                      </span>{' '}
+                      · {outcome.result.vehicleTypeName}
+                      {outcome.result.customerName ? ` · ${outcome.result.customerName}` : ''}
+                      {outcome.result.booking
+                        ? ` · ${outcome.result.booking.code} until ${fmtTime(outcome.result.booking.endAt)}`
+                        : ''}
+                    </p>
+                    {outcome.result.charges && <ChargeBreakdown c={outcome.result.charges} />}
                     {outcome.kind === 'due' && (
                       <div className="grid gap-2">
-                        <p className="text-2xl font-semibold">Collect {formatRupees(outcome.result.amountDuePaise)}</p>
+                        <p className="text-2xl font-semibold">
+                          Collect {formatRupees(outcome.result.amountDuePaise)}
+                        </p>
                         <div className="flex gap-2">
-                          <Button loading={busy} onClick={() => collect(outcome.result.sessionId, 'CASH')}>Paid in cash</Button>
-                          <Button variant="outline" disabled={busy} onClick={() => collect(outcome.result.sessionId, 'UPI')}>Paid by UPI</Button>
+                          <Button
+                            loading={busy}
+                            onClick={() => collect(outcome.result.sessionId, 'CASH')}
+                          >
+                            Paid in cash
+                          </Button>
+                          <Button
+                            variant="outline"
+                            disabled={busy}
+                            onClick={() => collect(outcome.result.sessionId, 'UPI')}
+                          >
+                            Paid by UPI
+                          </Button>
                         </div>
                       </div>
                     )}
@@ -240,20 +415,53 @@ export default function ScannerPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Inside now ({sessions.data?.filter((s) => !s.exitAt).length ?? 0})</CardTitle>
+              <CardTitle className="text-lg">
+                Inside now ({sessions.data?.filter((s) => !s.exitAt).length ?? 0})
+              </CardTitle>
             </CardHeader>
             <CardContent className="grid gap-2">
-              {sessions.data?.length === 0 && <p className="text-sm text-muted-foreground">No vehicles inside.</p>}
+              {sessions.data?.length === 0 && (
+                <p className="text-sm text-muted-foreground">No vehicles inside.</p>
+              )}
               {sessions.data?.map((s) => {
-                const late = s.bookingEndAt && new Date(s.bookingEndAt) < new Date();
+                const now = Date.now();
+                const late = s.bookingEndAt && new Date(s.bookingEndAt).getTime() < now;
+                const graceLeft =
+                  late && s.freeUntil && new Date(s.freeUntil).getTime() > now
+                    ? Math.ceil((new Date(s.freeUntil).getTime() - now) / 60_000)
+                    : 0;
                 return (
-                  <div key={s.id} className="flex flex-wrap items-center gap-2 rounded-md border px-3 py-2 text-sm">
+                  <div
+                    key={s.id}
+                    className="flex flex-wrap items-center gap-2 rounded-md border px-3 py-2 text-sm"
+                  >
                     <span className="font-mono font-semibold">{formatPlate(s.plateNumber)}</span>
                     <span className="text-muted-foreground">{s.vehicleTypeName}</span>
-                    {s.isWalkIn ? <Badge variant="info">Walk-in</Badge> : <Badge variant="muted">{s.bookingCode}</Badge>}
-                    {late && <Badge variant="danger">Overstaying</Badge>}
-                    <span className="flex-1 text-right text-muted-foreground">in {fmtTime(s.entryAt)}{s.bookingEndAt ? ` · until ${fmtTime(s.bookingEndAt)}` : ''}</span>
-                    <Button size="sm" variant="outline" disabled={busy} onClick={() => void scan(s.plateNumber, 'EXIT')}>
+                    {s.isWalkIn ? (
+                      <Badge variant="info">Walk-in</Badge>
+                    ) : (
+                      <Badge variant="muted">{s.bookingCode}</Badge>
+                    )}
+                    {graceLeft > 0 ? (
+                      <Badge variant="warning">Grace: {graceLeft} min left</Badge>
+                    ) : (
+                      late && <Badge variant="danger">Overstaying</Badge>
+                    )}
+                    {s.dueNowPaise > 0 && (
+                      <span className="font-semibold text-amber-600 tabular-nums dark:text-amber-400">
+                        {formatRupees(s.dueNowPaise)} due
+                      </span>
+                    )}
+                    <span className="flex-1 text-right text-muted-foreground">
+                      in {fmtTime(s.entryAt)}
+                      {s.bookingEndAt ? ` · until ${fmtTime(s.bookingEndAt)}` : ''}
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={busy}
+                      onClick={() => void scan(s.plateNumber, 'EXIT')}
+                    >
                       Check out
                     </Button>
                   </div>
@@ -268,8 +476,18 @@ export default function ScannerPage() {
             <CardTitle className="text-lg">Walk-in (no booking)</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-3">
-            <Input value={walkPlate} onChange={(e) => setWalkPlate(e.target.value)} placeholder="Number plate" aria-label="Number plate" className="font-mono uppercase" />
-            <Select value={walkType} onChange={(e) => setWalkType(e.target.value)} aria-label="Vehicle type">
+            <Input
+              value={walkPlate}
+              onChange={(e) => setWalkPlate(e.target.value)}
+              placeholder="Number plate"
+              aria-label="Number plate"
+              className="font-mono uppercase"
+            />
+            <Select
+              value={walkType}
+              onChange={(e) => setWalkType(e.target.value)}
+              aria-label="Vehicle type"
+            >
               {loc?.capacities.map((c) => (
                 <option key={c.vehicleTypeId} value={c.vehicleTypeId}>
                   {c.vehicleTypeName}
@@ -279,7 +497,9 @@ export default function ScannerPage() {
             <Button loading={busy} disabled={walkPlate.trim().length < 4} onClick={walkIn}>
               Let in as walk-in
             </Button>
-            <p className="text-xs text-muted-foreground">Charged at the hourly rate per started hour when the vehicle leaves.</p>
+            <p className="text-xs text-muted-foreground">
+              Charged at the hourly rate per started hour when the vehicle leaves.
+            </p>
           </CardContent>
         </Card>
       </div>

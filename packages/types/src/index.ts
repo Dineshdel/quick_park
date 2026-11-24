@@ -142,6 +142,8 @@ export interface PlatformSettingsDto {
   entryGraceMinutes: number;
   fewLeftThreshold: number;
   exitGraceMinutes: number;
+  /** Hourly/daily bookings not checked in this long after the start are released (0 = keep until the end). */
+  noShowReleaseMinutes: number;
   updatedAt: string;
 }
 
@@ -189,7 +191,16 @@ export type PayoutStatus = keyof typeof PayoutStatus;
 export const DisputeStatus = enumOf('OPEN', 'RESOLVED', 'REJECTED');
 export type DisputeStatus = keyof typeof DisputeStatus;
 
-export const AMENITIES = ['CCTV', 'Covered', 'Security guard', 'EV charging', 'Washroom', 'Wheelchair access', 'Car wash', 'Valet'] as const;
+export const AMENITIES = [
+  'CCTV',
+  'Covered',
+  'Security guard',
+  'EV charging',
+  'Washroom',
+  'Wheelchair access',
+  'Car wash',
+  'Valet',
+] as const;
 
 /** Prefix of booking pass QR text: `qpb:<bookingId>.<signature>`. */
 export const BOOKING_QR_PREFIX = 'qpb:';
@@ -276,6 +287,8 @@ export interface LocationDto {
   status: LocationStatus;
   rejectionReason: string | null;
   isEvent: boolean;
+  /** Free parking: no prices, bookings confirm without payment. */
+  isFree: boolean;
   eventName: string | null;
   eventStartAt: string | null;
   eventEndAt: string | null;
@@ -283,7 +296,55 @@ export interface LocationDto {
   cancellationPolicy: { id: string; name: string; rules: CancellationRule[] } | null;
   photos: PhotoDto[];
   capacities: CapacityDto[];
+  /** Sub-places with their floors/zones; empty when the place uses simple place-level slots. */
+  areas: AreaDto[];
   prices: PriceDto[];
+}
+
+export interface ZoneCapacityDto {
+  vehicleTypeId: string;
+  totalSlots: number;
+  onlineSlots: number;
+}
+
+export interface ZoneDto {
+  id: string;
+  name: string;
+  level: number;
+  tags: string[];
+  capacities: ZoneCapacityDto[];
+  /** Named slots (P01, 001…), in order; empty when the floor works on counts only. */
+  slots: SlotDto[];
+}
+
+export interface SlotDto {
+  id: string;
+  label: string;
+  vehicleTypeId: string;
+  /** false = walk-in / reserved, not bookable in the app. */
+  isOnline: boolean;
+}
+
+/** A bookable named slot and whether it is free for the requested window. */
+export interface SlotAvailabilityDto {
+  id: string;
+  label: string;
+  free: boolean;
+}
+
+export interface AreaDto {
+  id: string;
+  name: string;
+  description: string | null;
+  lat: number | null;
+  lng: number | null;
+  zones: ZoneDto[];
+}
+
+/** Free online slots per floor/zone for a time window (already capped by the place's overall free slots). */
+export interface ZoneAvailabilityDto {
+  zoneId: string;
+  free: number;
 }
 
 export interface OwnerLocationDto extends LocationDto {
@@ -304,6 +365,7 @@ export interface SearchResultDto {
   photoUrl: string | null;
   is24x7: boolean;
   isEvent: boolean;
+  isFree: boolean;
   /** Cheapest active price for the requested (or any) vehicle type. */
   fromPaise: number | null;
   fromPlan: PlanType | null;
@@ -342,9 +404,23 @@ export interface BookingDto {
   cancelReason: string | null;
   extendedFromId: string | null;
   cancellationRules: CancellationRule[];
-  location: { id: string; name: string; slug: string; address: string; city: string; lat: number; lng: number };
+  location: {
+    id: string;
+    name: string;
+    slug: string;
+    address: string;
+    city: string;
+    lat: number;
+    lng: number;
+  };
   vehicle: { id: string; plateNumber: string };
   vehicleType: { id: string; code: string; name: string };
+  /** Floor/zone booked; null = any floor. */
+  zone: { id: string; name: string; areaName: string } | null;
+  /** Confirmed hourly/daily bookings not yet checked in: the slot is released if the vehicle isn't in by then. */
+  checkInBy?: string | null;
+  /** Named slot (P01…) when the floor has them. */
+  slot: { id: string; label: string } | null;
   refundedPaise: number;
   createdAt: string;
 }
@@ -377,7 +453,28 @@ export interface ScanResultDto {
   overstayMinutes: number;
   /** Amount to collect at the gate (overstay or walk-in), in paise. */
   amountDuePaise: number;
+  /** How the amount was worked out (shown at check-out); null when nothing is charged. */
+  charges: ChargeBreakdownDto | null;
   message: string;
+}
+
+/** Gate charge, per started hour: overstay past the booking end (after the free grace) or a walk-in stay. */
+export interface ChargeBreakdownDto {
+  kind: 'OVERSTAY' | 'WALK_IN';
+  /** Overstay: end of the booking incl. extensions. Walk-in: entry time. */
+  from: string;
+  /** Free minutes after the booking end before overstay is charged (0 for walk-ins). */
+  graceMinutes: number;
+  /** When the vehicle checks out (now). */
+  until: string;
+  /** Minutes stayed past the booking end (overstay) or since entry (walk-in). */
+  minutes: number;
+  /** Hours charged: every started hour counts. */
+  hours: number;
+  ratePerHourPaise: number;
+  amountPaise: number;
+  /** e.g. "Daily rate applied (cheaper than hourly)". */
+  note: string | null;
 }
 
 export interface SessionDto {
@@ -392,6 +489,10 @@ export interface SessionDto {
   overstayAmountPaise: number;
   walkInAmountPaise: number;
   paymentMethod: PaymentMethod | null;
+  /** Vehicles still inside: booking end incl. extensions + free grace; overstay is charged after this. */
+  freeUntil: string | null;
+  /** Vehicles still inside: what check-out would charge right now. */
+  dueNowPaise: number;
 }
 
 export interface AvailabilityEvent {
@@ -419,7 +520,13 @@ export interface OwnerBookingDto {
 }
 
 export interface OwnerDashboardDto {
-  locations: { id: string; name: string; status: LocationStatus; inside: number; capacity: number }[];
+  locations: {
+    id: string;
+    name: string;
+    status: LocationStatus;
+    inside: number;
+    capacity: number;
+  }[];
   todayBookings: number;
   insideNow: number;
   revenueTodayPaise: number;
@@ -436,7 +543,13 @@ export interface EarningsDto {
   netPaise: number;
   walkInPaise: number;
   overstayPaise: number;
-  byLocation: { locationId: string; name: string; grossPaise: number; netPaise: number; bookings: number }[];
+  byLocation: {
+    locationId: string;
+    name: string;
+    grossPaise: number;
+    netPaise: number;
+    bookings: number;
+  }[];
 }
 
 export interface PayoutDto {

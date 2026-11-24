@@ -32,10 +32,19 @@
   --chrome-foreground: oklch(0.93 0.01 258);
   --chrome-muted: oklch(0.72 0.03 258);
   --chrome-hover: oklch(0.27 0.06 264);
+  /* Form fields: a cool tint and firmer border so inputs stand apart from the white cards. */
+  --field: oklch(0.968 0.012 258);
+  --field-border: oklch(0.83 0.025 258);
+  color-scheme: light;
 }
 
 /* Night mode: the .dark class is set from the header toggle (or the device setting when "System" is chosen). */
 :root.dark {
+  /* Native pickers (select lists, date pickers, scrollbars) follow the theme too. */
+  color-scheme: dark;
+  /* Fields sit darker than the cards, like an inset. */
+  --field: oklch(0.165 0.028 258);
+  --field-border: oklch(1 0 0 / 20%);
   --background: oklch(0.19 0.03 258);
   --foreground: oklch(0.95 0.008 85);
   --card: oklch(0.235 0.035 258);
@@ -97,6 +106,8 @@
   --color-success: var(--success);
   --color-border: var(--border);
   --color-input: var(--input);
+  --color-field: var(--field);
+  --color-field-border: var(--field-border);
   --color-ring: var(--ring);
 }
 
@@ -110,6 +121,11 @@
   /* Classic serif for page titles; UI text stays in the clean sans. */
   h1 {
     @apply font-serif;
+  }
+  /* Options of native dropdowns use the card colours instead of the browser's white list. */
+  option,
+  optgroup {
+    @apply bg-card text-card-foreground;
   }
 }
 

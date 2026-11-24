@@ -4,12 +4,29 @@ import type { SelfServiceRole } from '@qp/types';
 import { Building2, Car } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 
-const OPTIONS: { value: SelfServiceRole; label: string; description: string; Icon: typeof Car }[] = [
-  { value: 'VEHICLE_OWNER', label: 'I park vehicles', description: 'Find, book and pay for parking', Icon: Car },
-  { value: 'PARKING_OWNER', label: 'I own a parking place', description: 'List places and manage entry/exit', Icon: Building2 },
-];
+const OPTIONS: { value: SelfServiceRole; label: string; description: string; Icon: typeof Car }[] =
+  [
+    {
+      value: 'VEHICLE_OWNER',
+      label: 'I park vehicles',
+      description: 'Find, book and pay for parking',
+      Icon: Car,
+    },
+    {
+      value: 'PARKING_OWNER',
+      label: 'I own a parking place',
+      description: 'List places and manage entry/exit',
+      Icon: Building2,
+    },
+  ];
 
-export function RolePicker({ value, onChange }: { value?: SelfServiceRole; onChange: (v: SelfServiceRole) => void }) {
+export function RolePicker({
+  value,
+  onChange,
+}: {
+  value?: SelfServiceRole;
+  onChange: (v: SelfServiceRole) => void;
+}) {
   return (
     <div role="radiogroup" aria-label="Account type" className="grid gap-3 sm:grid-cols-2">
       {OPTIONS.map(({ value: v, label, description, Icon }) => (

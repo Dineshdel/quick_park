@@ -1,6 +1,14 @@
 import type { ReactNode } from 'react';
 
-export function PageShell({ title, description, children }: { title: string; description?: string; children?: ReactNode }) {
+export function PageShell({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children?: ReactNode;
+}) {
   return (
     <div className="mx-auto grid max-w-6xl gap-6 px-4 py-8">
       <div className="border-b pb-4">

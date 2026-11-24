@@ -38,7 +38,14 @@ export class NotificationsService {
         user: { select: { name: true, email: true } },
         vehicle: { select: { plateNumber: true } },
         vehicleType: { select: { name: true } },
-        location: { select: { name: true, address: true, owner: { select: { user: { select: { name: true, email: true } } } } } },
+        location: {
+          select: {
+            name: true,
+            slug: true,
+            address: true,
+            owner: { select: { user: { select: { name: true, email: true } } } },
+          },
+        },
       },
     });
   }
@@ -86,6 +93,20 @@ export class NotificationsService {
     });
   }
 
+  /** The vehicle didn't check in in time, so the booking was released. */
+  noShow(bookingId: string, checkInBy: Date) {
+    return this.safe('noShow', async () => {
+      const b = await this.booking(bookingId);
+      await this.mail.send(b.user.email, 'bookingNoShow', {
+        name: b.user.name,
+        code: b.code,
+        place: b.location.name,
+        by: this.pass.fmt(checkInBy),
+        link: this.link(`/p/${b.location.slug}`),
+      });
+    });
+  }
+
   reminder(bookingId: string) {
     return this.safe('reminder', async () => {
       const b = await this.booking(bookingId);
@@ -116,7 +137,11 @@ export class NotificationsService {
     return this.safe('session', async () => {
       const s = await this.prisma.parkingSession.findUniqueOrThrow({
         where: { id: sessionId },
-        include: { location: { select: { name: true } }, vehicleType: { select: { name: true } }, vehicle: { select: { user: { select: { name: true, email: true } } } } },
+        include: {
+          location: { select: { name: true } },
+          vehicleType: { select: { name: true } },
+          vehicle: { select: { user: { select: { name: true, email: true } } } },
+        },
       });
       const user = s.vehicle?.user;
       if (!user) return; // walk-ins have no account
@@ -127,21 +152,39 @@ export class NotificationsService {
         vehicle: `${formatPlate(s.plateNumber)} (${s.vehicleType.name})`,
         action,
         at: this.pass.fmt(action === 'entry' ? s.entryAt : (s.exitAt ?? new Date())),
-        extra: action === 'exit' && due ? `Overstay of ${s.overstayMinutes} min charged ${formatRupees(due)}.` : '',
+        extra:
+          action === 'exit' && due
+            ? `Overstay of ${s.overstayMinutes} min charged ${formatRupees(due)}.`
+            : '',
       });
     });
   }
 
   kycDecision(ownerId: string, approved: boolean, reason?: string) {
     return this.safe('kycDecision', async () => {
-      const o = await this.prisma.owner.findUniqueOrThrow({ where: { id: ownerId }, include: { user: true } });
-      await this.mail.send(o.user.email, 'kycDecision', { name: o.user.name, approved, reason, link: this.link('/parking-owner/onboarding') });
+      const o = await this.prisma.owner.findUniqueOrThrow({
+        where: { id: ownerId },
+        include: { user: true },
+      });
+      await this.mail.send(o.user.email, 'kycDecision', {
+        name: o.user.name,
+        approved,
+        reason,
+        link: this.link('/parking-owner/onboarding'),
+      });
     });
   }
 
-  locationDecision(locationId: string, status: 'approved' | 'rejected' | 'suspended', reason?: string) {
+  locationDecision(
+    locationId: string,
+    status: 'approved' | 'rejected' | 'suspended',
+    reason?: string,
+  ) {
     return this.safe('locationDecision', async () => {
-      const l = await this.prisma.parkingLocation.findUniqueOrThrow({ where: { id: locationId }, include: { owner: { include: { user: true } } } });
+      const l = await this.prisma.parkingLocation.findUniqueOrThrow({
+        where: { id: locationId },
+        include: { owner: { include: { user: true } } },
+      });
       await this.mail.send(l.owner.user.email, 'locationDecision', {
         name: l.owner.user.name,
         place: l.name,
@@ -154,7 +197,10 @@ export class NotificationsService {
 
   disputeUpdate(disputeId: string) {
     return this.safe('disputeUpdate', async () => {
-      const d = await this.prisma.dispute.findUniqueOrThrow({ where: { id: disputeId }, include: { booking: { include: { user: true } } } });
+      const d = await this.prisma.dispute.findUniqueOrThrow({
+        where: { id: disputeId },
+        include: { booking: { include: { user: true } } },
+      });
       await this.mail.send(d.booking.user.email, 'disputeUpdate', {
         name: d.booking.user.name,
         code: d.booking.code,

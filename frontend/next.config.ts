@@ -2,8 +2,9 @@ import { loadEnvConfig } from '@next/env';
 import type { NextConfig } from 'next';
 import path from 'node:path';
 
-// One .env at the repo root serves both apps.
-loadEnvConfig(path.resolve(__dirname, '..'));
+// One .env at the repo root serves both apps. Next has already loaded (and cached) env files from frontend/
+// before this runs, so force a reload from the root, otherwise NEXT_PUBLIC_* values never reach the browser.
+loadEnvConfig(path.resolve(__dirname, '..'), process.env.NODE_ENV !== 'production', console, true);
 
 const apiUrl = process.env.API_INTERNAL_URL ?? 'http://localhost:4000';
 

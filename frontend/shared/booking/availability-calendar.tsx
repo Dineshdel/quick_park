@@ -18,12 +18,23 @@ const STATE_CLASS = {
 const monthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 
 /** Month view of free / few-left / full days for one vehicle type (public endpoint). */
-export function AvailabilityCalendar({ locationId, vehicleTypeId, onPickDate }: { locationId: string; vehicleTypeId: string; onPickDate?: (date: string) => void }) {
+export function AvailabilityCalendar({
+  locationId,
+  vehicleTypeId,
+  onPickDate,
+}: {
+  locationId: string;
+  vehicleTypeId: string;
+  onPickDate?: (date: string) => void;
+}) {
   const [cursor, setCursor] = useState(() => new Date());
   const month = monthKey(cursor);
   const cal = useQuery({
     queryKey: ['calendar', locationId, vehicleTypeId, month],
-    queryFn: () => api<CalendarDto>(`/parkings/${locationId}/calendar?month=${month}&vehicleType=${vehicleTypeId}`),
+    queryFn: () =>
+      api<CalendarDto>(
+        `/parkings/${locationId}/calendar?month=${month}&vehicleType=${vehicleTypeId}`,
+      ),
   });
   const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
   const lead = (first.getDay() + 6) % 7; // Monday first
@@ -33,10 +44,18 @@ export function AvailabilityCalendar({ locationId, vehicleTypeId, onPickDate }: 
   return (
     <div className="grid gap-3">
       <div className="flex items-center justify-between">
-        <Button variant="ghost" size="icon" onClick={() => shift(-1)} aria-label="Previous month" disabled={month <= monthKey(new Date())}>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => shift(-1)}
+          aria-label="Previous month"
+          disabled={month <= monthKey(new Date())}
+        >
           <ChevronLeft />
         </Button>
-        <p className="font-medium">{first.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}</p>
+        <p className="font-medium">
+          {first.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
+        </p>
         <Button variant="ghost" size="icon" onClick={() => shift(1)} aria-label="Next month">
           <ChevronRight />
         </Button>
@@ -51,7 +70,9 @@ export function AvailabilityCalendar({ locationId, vehicleTypeId, onPickDate }: 
           <div key={`lead-${i}`} />
         ))}
         {cal.isPending
-          ? Array.from({ length: 30 }, (_, i) => <div key={i} className="h-11 animate-pulse rounded-md bg-muted" />)
+          ? Array.from({ length: 30 }, (_, i) => (
+              <div key={i} className="h-11 animate-pulse rounded-md bg-muted" />
+            ))
           : cal.data?.days.map((d) => {
               const past = d.date < today;
               return (
@@ -61,19 +82,33 @@ export function AvailabilityCalendar({ locationId, vehicleTypeId, onPickDate }: 
                   disabled={past || d.state === 'full' || d.state === 'closed' || !onPickDate}
                   onClick={() => onPickDate?.(d.date)}
                   title={past ? 'Past' : d.state === 'closed' ? 'Closed' : `${d.free} free`}
-                  className={cn('flex h-11 flex-col items-center justify-center rounded-md text-sm transition-opacity', past ? 'opacity-30' : STATE_CLASS[d.state], onPickDate && !past && 'hover:ring-2 hover:ring-ring/50')}
+                  className={cn(
+                    'flex h-11 flex-col items-center justify-center rounded-md text-sm transition-opacity',
+                    past ? 'opacity-30' : STATE_CLASS[d.state],
+                    onPickDate && !past && 'hover:ring-2 hover:ring-ring/50',
+                  )}
                 >
                   <span className="font-medium">{Number(d.date.slice(8))}</span>
-                  {!past && d.state !== 'closed' && <span className="text-[10px] leading-none">{d.free}</span>}
+                  {!past && d.state !== 'closed' && (
+                    <span className="text-[10px] leading-none">{d.free}</span>
+                  )}
                 </button>
               );
             })}
       </div>
       <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-        <span className="flex items-center gap-1"><span className="size-3 rounded bg-success/30" /> Free</span>
-        <span className="flex items-center gap-1"><span className="size-3 rounded bg-amber-500/40" /> Few left</span>
-        <span className="flex items-center gap-1"><span className="size-3 rounded bg-destructive/30" /> Full</span>
-        <span className="flex items-center gap-1"><span className="size-3 rounded bg-muted" /> Closed</span>
+        <span className="flex items-center gap-1">
+          <span className="size-3 rounded bg-success/30" /> Free
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="size-3 rounded bg-amber-500/40" /> Few left
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="size-3 rounded bg-destructive/30" /> Full
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="size-3 rounded bg-muted" /> Closed
+        </span>
       </div>
     </div>
   );

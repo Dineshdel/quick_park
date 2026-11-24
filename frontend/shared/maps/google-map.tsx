@@ -4,7 +4,13 @@ import { AdvancedMarker, InfoWindow, Map as GMap, Pin, useMap } from '@vis.gl/re
 import { useEffect, useState } from 'react';
 import { DEFAULT_CENTER, GOOGLE_MAP_ID, type MapPoint, type MapProps } from './config';
 
-function FitBounds({ points, origin }: { points: MapPoint[]; origin?: { lat: number; lng: number } | null }) {
+function FitBounds({
+  points,
+  origin,
+}: {
+  points: MapPoint[];
+  origin?: { lat: number; lng: number } | null;
+}) {
   const map = useMap();
   useEffect(() => {
     if (!map) return;
@@ -32,7 +38,15 @@ function Recenter({ lat, lng }: { lat: number; lng: number }) {
 }
 
 /** Google Maps version of the shared map (same props as the Leaflet one). Must be inside <APIProvider>. */
-export default function GoogleMap({ points = [], center = DEFAULT_CENTER, pick, onPick, activeId, origin, className = 'h-80' }: MapProps) {
+export default function GoogleMap({
+  points = [],
+  center = DEFAULT_CENTER,
+  pick,
+  onPick,
+  activeId,
+  origin,
+  className = 'h-80',
+}: MapProps) {
   const [open, setOpen] = useState<MapPoint | null>(null);
 
   return (
@@ -60,13 +74,29 @@ export default function GoogleMap({ points = [], center = DEFAULT_CENTER, pick, 
         )}
 
         {points.map((p) => (
-          <AdvancedMarker key={p.id} position={{ lat: p.lat, lng: p.lng }} title={p.label} onClick={() => setOpen(p)} zIndex={p.id === activeId ? 10 : 2}>
-            <Pin background={p.id === activeId ? '#dc2626' : '#111827'} borderColor="#ffffff" glyphColor="#ffffff" scale={p.id === activeId ? 1.25 : 1} />
+          <AdvancedMarker
+            key={p.id}
+            position={{ lat: p.lat, lng: p.lng }}
+            title={p.label}
+            onClick={() => setOpen(p)}
+            zIndex={p.id === activeId ? 10 : 2}
+          >
+            <Pin
+              background={p.id === activeId ? '#dc2626' : '#111827'}
+              borderColor="#ffffff"
+              glyphColor="#ffffff"
+              scale={p.id === activeId ? 1.25 : 1}
+            />
           </AdvancedMarker>
         ))}
 
         {open && (
-          <InfoWindow position={{ lat: open.lat, lng: open.lng }} pixelOffset={[0, -36]} onCloseClick={() => setOpen(null)} headerDisabled>
+          <InfoWindow
+            position={{ lat: open.lat, lng: open.lng }}
+            pixelOffset={[0, -36]}
+            onCloseClick={() => setOpen(null)}
+            headerDisabled
+          >
             <div className="grid gap-0.5 text-sm text-neutral-900">
               {open.href ? (
                 <a href={open.href} className="font-semibold underline">

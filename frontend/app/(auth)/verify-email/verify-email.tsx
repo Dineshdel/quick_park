@@ -9,7 +9,9 @@ import { api, ApiError } from '@/shared/lib/api';
 
 export function VerifyEmail() {
   const token = useSearchParams().get('token');
-  const [state, setState] = useState<{ kind: 'pending' | 'ok' | 'error'; message?: string }>({ kind: 'pending' });
+  const [state, setState] = useState<{ kind: 'pending' | 'ok' | 'error'; message?: string }>({
+    kind: 'pending',
+  });
   const started = useRef(false); // tokens are single use: never submit twice (React strict mode)
 
   useEffect(() => {
@@ -18,7 +20,12 @@ export function VerifyEmail() {
     if (!token) return setState({ kind: 'error', message: 'This link is missing its token.' });
     api<{ message: string }>('/auth/verify-email', { body: { token } })
       .then((r) => setState({ kind: 'ok', message: r.message }))
-      .catch((e) => setState({ kind: 'error', message: e instanceof ApiError ? e.message : 'Verification failed' }));
+      .catch((e) =>
+        setState({
+          kind: 'error',
+          message: e instanceof ApiError ? e.message : 'Verification failed',
+        }),
+      );
   }, [token]);
 
   if (state.kind === 'pending') return <p className="text-sm text-muted-foreground">Verifying…</p>;

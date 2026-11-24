@@ -164,6 +164,20 @@ describe('POST /auth/refresh + logout', () => {
     await post('/auth/refresh').set(CSRF).set('Cookie', second).expect(401);
   });
 
+  it('mobile app: refresh token comes in the body (no cookie), and refresh/logout take it from the body', async () => {
+    const { email } = await createUser(ctx, 'VEHICLE_OWNER');
+    const MOBILE = { 'X-QP-Client': 'mobile' };
+    const res = await post('/auth/login', { email, password: PASSWORD }).set(MOBILE).expect(200);
+    expect(res.headers['set-cookie']).toBeUndefined();
+    expect(res.body).toMatchObject({ accessToken: expect.any(String), refreshToken: expect.any(String) });
+    const r1 = await post('/auth/refresh', { refreshToken: res.body.refreshToken }).set(CSRF).set(MOBILE).expect(200);
+    expect(r1.body.refreshToken).not.toBe(res.body.refreshToken);
+    // Without the mobile header the body token is ignored (web only uses the cookie).
+    await post('/auth/refresh', { refreshToken: r1.body.refreshToken }).set(CSRF).expect(401);
+    await post('/auth/logout', { refreshToken: r1.body.refreshToken }).set(CSRF).set(MOBILE).expect(204);
+    await post('/auth/refresh', { refreshToken: r1.body.refreshToken }).set(CSRF).set(MOBILE).expect(401);
+  });
+
   it('rejects expired refresh tokens', async () => {
     const { email } = await createUser(ctx, 'VEHICLE_OWNER');
     const { cookie } = await login(ctx, email);

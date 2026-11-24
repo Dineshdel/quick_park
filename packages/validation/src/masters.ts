@@ -25,7 +25,11 @@ export const vehicleTypeCreateSchema = z.object({
     .string()
     .trim()
     .toUpperCase()
-    .pipe(z.string().regex(/^[A-Z][A-Z0-9_]{1,19}$/, 'Use 2–20 capital letters, digits or _ (e.g. EV_CAR)')),
+    .pipe(
+      z
+        .string()
+        .regex(/^[A-Z][A-Z0-9_]{1,19}$/, 'Use 2–20 capital letters, digits or _ (e.g. EV_CAR)'),
+    ),
   ...vehicleTypeFields,
   icon: iconSchema.optional(),
   sortOrder: sortOrderSchema.optional(),
@@ -79,11 +83,17 @@ export const cancellationRulesSchema = z
       ctx.addIssue({ code: 'custom', message: 'Each rule needs a different number of hours' });
     }
     if (!hours.includes(0)) {
-      ctx.addIssue({ code: 'custom', message: 'Add a rule for 0 hours (cancelling at the last moment)' });
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Add a rule for 0 hours (cancelling at the last moment)',
+      });
     }
     for (let i = 1; i < rules.length; i++) {
       if (rules[i]!.refundPct > rules[i - 1]!.refundPct) {
-        ctx.addIssue({ code: 'custom', message: 'Refunds cannot increase closer to the start time' });
+        ctx.addIssue({
+          code: 'custom',
+          message: 'Refunds cannot increase closer to the start time',
+        });
         break;
       }
     }
@@ -125,6 +135,7 @@ export const platformSettingsSchema = z.object({
   entryGraceMinutes: z.coerce.number().int().min(0).max(240),
   fewLeftThreshold: z.coerce.number().int().min(0).max(1000),
   exitGraceMinutes: z.coerce.number().int().min(0).max(240),
+  noShowReleaseMinutes: z.coerce.number().int().min(0).max(1440),
 });
 export const platformSettingsUpdateSchema = platformSettingsSchema.partial();
 export type PlatformSettingsUpdateInput = z.input<typeof platformSettingsUpdateSchema>;

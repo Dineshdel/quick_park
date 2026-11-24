@@ -6,6 +6,7 @@ import { Clock, MapPin, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { AvailabilityCalendar } from '@/shared/booking/availability-calendar';
+import { bookableZones, FloorList, useZoneAvailability } from '@/shared/booking/floors';
 import { api, ApiError } from '@/shared/lib/api';
 import { useSession } from '@/shared/lib/auth/use-session';
 import { fmtDateTime, formatRupees, planUnit } from '@/shared/lib/format';
@@ -13,6 +14,7 @@ import { Map } from '@/shared/maps/map';
 import { useLiveAvailability } from '@/shared/realtime/use-live-availability';
 import { Alert } from '@/shared/ui/alert';
 import { Badge } from '@/shared/ui/badge';
+import { PhotoGallery } from '@/shared/ui/photo-gallery';
 import { Button } from '@/shared/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/shared/ui/card';
 import { Tabs } from '@/shared/ui/tabs';
@@ -24,21 +26,50 @@ const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 export function PlaceView({ initial, wantedType }: { initial: LocationDto; wantedType?: string }) {
   const slug = initial.slug;
   const s = useSession();
-  const place = useQuery({ queryKey: ['place', slug], queryFn: () => api<LocationDto>(`/parkings/${slug}`), initialData: initial });
+  const place = useQuery({
+    queryKey: ['place', slug],
+    queryFn: () => api<LocationDto>(`/parkings/${slug}`),
+    initialData: initial,
+  });
   const [vt, setVt] = useState<string>('');
   const { live } = useLiveAvailability(place.data?.id);
+  // "Free now" per floor: the next hour, refreshed every 30 s and whenever live numbers change.
+  const [now] = useState(() => new Date(Math.floor(Date.now() / 60_000) * 60_000));
+  const hasFloors = !!vt && !!place.data && bookableZones(place.data.areas, vt).length > 0;
+  const floors = useZoneAvailability(
+    place.data?.id,
+    vt,
+    now.toISOString(),
+    new Date(now.getTime() + 3_600_000).toISOString(),
+    hasFloors,
+  );
+  const liveFree = vt ? live[vt]?.free : undefined;
+  useEffect(() => {
+    if (hasFloors && liveFree !== undefined) void floors.refetch();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveFree, hasFloors]);
 
   useEffect(() => {
     if (!place.data || vt) return;
     const offeredTypes = place.data.capacities.filter((c) => c.onlineSlots > 0);
-    setVt((offeredTypes.find((c) => c.vehicleTypeId === wantedType) ?? offeredTypes[0])?.vehicleTypeId ?? '');
+    setVt(
+      (offeredTypes.find((c) => c.vehicleTypeId === wantedType) ?? offeredTypes[0])
+        ?.vehicleTypeId ?? '',
+    );
   }, [place.data, vt, wantedType]);
 
-  if (place.isPending) return <div className="mx-auto max-w-5xl px-4 py-8 text-sm text-muted-foreground">Loading…</div>;
+  if (place.isPending)
+    return (
+      <div className="mx-auto max-w-5xl px-4 py-8 text-sm text-muted-foreground">Loading…</div>
+    );
   if (place.isError) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-8">
-        <Alert variant="destructive">{place.error instanceof ApiError && place.error.status === 404 ? 'This parking place is not available.' : 'Could not load this place.'}</Alert>
+        <Alert variant="destructive">
+          {place.error instanceof ApiError && place.error.status === 404
+            ? 'This parking place is not available.'
+            : 'Could not load this place.'}
+        </Alert>
       </div>
     );
   }
@@ -56,6 +87,7 @@ export function PlaceView({ initial, wantedType }: { initial: LocationDto; wante
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="text-3xl font-bold tracking-tight">{p.name}</h1>
           <Badge variant="muted">{p.category.name}</Badge>
+          {p.isFree && <Badge variant="success">Free parking</Badge>}
           {p.is24x7 && <Badge variant="info">Open 24×7</Badge>}
           {p.isEvent && <Badge variant="warning">Event: {p.eventName}</Badge>}
         </div>
@@ -70,13 +102,7 @@ export function PlaceView({ initial, wantedType }: { initial: LocationDto; wante
         )}
       </div>
 
-      {p.photos.length > 0 && (
-        <div className="flex gap-2 overflow-x-auto pb-1">
-          {p.photos.map((ph) => (
-            <img key={ph.id} src={ph.url} alt={`${p.name} photo`} className="h-48 w-72 shrink-0 rounded-lg object-cover" />
-          ))}
-        </div>
-      )}
+      <PhotoGallery photos={p.photos} alt={`${p.name} photo`} />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
         <div className="grid content-start gap-6">
@@ -84,15 +110,24 @@ export function PlaceView({ initial, wantedType }: { initial: LocationDto; wante
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Prices</CardTitle>
+              <CardTitle className="text-lg">{p.isFree ? 'Free parking' : 'Prices'}</CardTitle>
+              {p.isFree && (
+                <p className="text-sm text-muted-foreground">
+                  No charges here. Book a slot for free and it is confirmed straight away.
+                </p>
+              )}
             </CardHeader>
             <CardContent className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="text-left text-muted-foreground">
                   <tr>
                     <th className="py-1 pr-3 font-medium">Vehicle</th>
-                    {PLAN_ORDER.filter((pl) => p.prices.some((x) => x.planType === pl && x.isActive)).map((pl) => (
-                      <th key={pl} className="py-1 pr-3 font-medium">Per {planUnit(pl)}</th>
+                    {PLAN_ORDER.filter((pl) =>
+                      p.prices.some((x) => x.planType === pl && x.isActive),
+                    ).map((pl) => (
+                      <th key={pl} className="py-1 pr-3 font-medium">
+                        {p.isFree ? `By ${planUnit(pl)}` : `Per ${planUnit(pl)}`}
+                      </th>
                     ))}
                     <th className="py-1 font-medium">Live</th>
                   </tr>
@@ -101,17 +136,34 @@ export function PlaceView({ initial, wantedType }: { initial: LocationDto; wante
                   {offered.map((c) => (
                     <tr key={c.vehicleTypeId} className="border-t">
                       <td className="py-2 pr-3 font-medium">{c.vehicleTypeName}</td>
-                      {PLAN_ORDER.filter((pl) => p.prices.some((x) => x.planType === pl && x.isActive)).map((pl) => {
-                        const price = p.prices.find((x) => x.vehicleTypeId === c.vehicleTypeId && x.planType === pl && x.isActive);
+                      {PLAN_ORDER.filter((pl) =>
+                        p.prices.some((x) => x.planType === pl && x.isActive),
+                      ).map((pl) => {
+                        const price = p.prices.find(
+                          (x) =>
+                            x.vehicleTypeId === c.vehicleTypeId && x.planType === pl && x.isActive,
+                        );
                         return (
                           <td key={pl} className="py-2 pr-3 tabular-nums">
-                            {price ? formatRupees(price.pricePaise) : '—'}
+                            {!price ? (
+                              '—'
+                            ) : p.isFree ? (
+                              <span className="font-medium text-success">Free</span>
+                            ) : (
+                              formatRupees(price.pricePaise)
+                            )}
                           </td>
                         );
                       })}
                       <td className="py-2 text-xs">
                         {live[c.vehicleTypeId] ? (
-                          <span className={live[c.vehicleTypeId]!.free ? 'text-success' : 'text-destructive'}>{live[c.vehicleTypeId]!.free} free now</span>
+                          <span
+                            className={
+                              live[c.vehicleTypeId]!.free ? 'text-success' : 'text-destructive'
+                            }
+                          >
+                            {live[c.vehicleTypeId]!.free} free now
+                          </span>
                         ) : (
                           <span className="text-muted-foreground">{c.onlineSlots} bookable</span>
                         )}
@@ -123,22 +175,69 @@ export function PlaceView({ initial, wantedType }: { initial: LocationDto; wante
               {offered.some((c) => c.overstayPerHourPaise > 0) && (
                 <p className="mt-3 text-xs text-muted-foreground">
                   Overstay after your booking ends is charged per started hour at the gate (
-                  {offered.filter((c) => c.overstayPerHourPaise).map((c) => `${c.vehicleTypeName} ${formatRupees(c.overstayPerHourPaise)}/h`).join(', ')}).
+                  {offered
+                    .filter((c) => c.overstayPerHourPaise)
+                    .map((c) => `${c.vehicleTypeName} ${formatRupees(c.overstayPerHourPaise)}/h`)
+                    .join(', ')}
+                  ).
                 </p>
               )}
             </CardContent>
           </Card>
+
+          {hasFloors && (
+            <Card>
+              <CardHeader className="gap-3">
+                <CardTitle className="text-lg">Floors &amp; areas</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Free slots in the next hour. You can pick a floor when booking.
+                </p>
+                {offered.length > 1 && (
+                  <Tabs
+                    value={vt}
+                    onChange={setVt}
+                    items={offered.map((c) => ({
+                      value: c.vehicleTypeId,
+                      label: c.vehicleTypeName,
+                    }))}
+                  />
+                )}
+              </CardHeader>
+              <CardContent>
+                <FloorList
+                  areas={p.areas}
+                  vehicleTypeId={vt}
+                  free={
+                    floors.data
+                      ? Object.fromEntries(floors.data.zones.map((z) => [z.zoneId, z.free]))
+                      : undefined
+                  }
+                />
+              </CardContent>
+            </Card>
+          )}
 
           {offered.length > 0 && vt && (
             <Card>
               <CardHeader className="gap-3">
                 <CardTitle className="text-lg">Availability</CardTitle>
                 {offered.length > 1 && (
-                  <Tabs value={vt} onChange={setVt} items={offered.map((c) => ({ value: c.vehicleTypeId, label: c.vehicleTypeName }))} />
+                  <Tabs
+                    value={vt}
+                    onChange={setVt}
+                    items={offered.map((c) => ({
+                      value: c.vehicleTypeId,
+                      label: c.vehicleTypeName,
+                    }))}
+                  />
                 )}
               </CardHeader>
               <CardContent>
-                <AvailabilityCalendar locationId={p.id} vehicleTypeId={vt} onPickDate={canBook ? (d) => (window.location.href = bookHref(d)) : undefined} />
+                <AvailabilityCalendar
+                  locationId={p.id}
+                  vehicleTypeId={vt}
+                  onPickDate={canBook ? (d) => (window.location.href = bookHref(d)) : undefined}
+                />
               </CardContent>
             </Card>
           )}
@@ -157,12 +256,14 @@ export function PlaceView({ initial, wantedType }: { initial: LocationDto; wante
               {p.cancellationPolicy && (
                 <div className="text-sm">
                   <p className="flex items-center gap-1 font-medium">
-                    <ShieldCheck className="size-4" aria-hidden /> {p.cancellationPolicy.name} cancellation
+                    <ShieldCheck className="size-4" aria-hidden /> {p.cancellationPolicy.name}{' '}
+                    cancellation
                   </p>
                   <ul className="mt-1 text-muted-foreground">
                     {p.cancellationPolicy.rules.map((r) => (
                       <li key={r.hoursBefore}>
-                        {r.hoursBefore === 0 ? 'Later' : `${r.hoursBefore}+ hours before start`}: {r.refundPct}% refund
+                        {r.hoursBefore === 0 ? 'Later' : `${r.hoursBefore}+ hours before start`}:{' '}
+                        {r.refundPct}% refund
                       </li>
                     ))}
                   </ul>
@@ -194,7 +295,12 @@ export function PlaceView({ initial, wantedType }: { initial: LocationDto; wante
             </CardContent>
           </Card>
           <Map className="h-64" points={[{ id: p.id, lat: p.lat, lng: p.lng, label: p.name }]} />
-          <a className="text-sm underline" href={`https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}`} target="_blank" rel="noreferrer">
+          <a
+            className="text-sm underline"
+            href={`https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}`}
+            target="_blank"
+            rel="noreferrer"
+          >
             Get directions
           </a>
         </div>

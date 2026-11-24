@@ -60,11 +60,18 @@ export function PlaceSearchInput({
       const sp = new URLSearchParams({ q, pageSize: '4' });
       if (vehicleType) sp.set('vehicleType', vehicleType);
       const [lots, areas] = await Promise.all([
-        parkings ? api<Paginated<SearchResultDto>>(`/parkings/search?${sp}`).then((r) => r.items).catch(() => []) : Promise.resolve([]),
+        parkings
+          ? api<Paginated<SearchResultDto>>(`/parkings/search?${sp}`)
+              .then((r) => r.items)
+              .catch(() => [])
+          : Promise.resolve([]),
         suggest(q).catch(() => []),
       ]);
       if (cancelled) return;
-      setOptions([...lots.map((item): Option => ({ kind: 'parking', item })), ...areas.map((item): Option => ({ kind: 'place', item }))]);
+      setOptions([
+        ...lots.map((item): Option => ({ kind: 'parking', item })),
+        ...areas.map((item): Option => ({ kind: 'place', item })),
+      ]);
       setActive(-1);
       setBusy(false);
       setOpen(true);
@@ -96,7 +103,10 @@ export function PlaceSearchInput({
 
   return (
     <div className={cn('relative', className)}>
-      <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+      <Search
+        className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+        aria-hidden
+      />
       <input
         role="combobox"
         aria-expanded={open && options.length > 0}
@@ -135,14 +145,31 @@ export function PlaceSearchInput({
         }}
         className="flex h-10 w-full rounded-md border border-input bg-transparent py-2 pr-9 pl-9 text-base shadow-xs outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 md:text-sm"
       />
-      {busy && <Loader2 className="absolute top-1/2 right-3 size-4 -translate-y-1/2 animate-spin text-muted-foreground" aria-hidden />}
+      {busy && (
+        <Loader2
+          className="absolute top-1/2 right-3 size-4 -translate-y-1/2 animate-spin text-muted-foreground"
+          aria-hidden
+        />
+      )}
 
       {open && options.length > 0 && (
-        <ul id={listId} role="listbox" className="absolute z-[1000] mt-1 max-h-80 w-full overflow-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-lg">
+        <ul
+          id={listId}
+          role="listbox"
+          className="absolute z-[1000] mt-1 max-h-80 w-full overflow-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-lg"
+        >
           {options.map((o, i) => (
             <li key={o.kind + (o.kind === 'parking' ? o.item.id : o.item.id)}>
-              {i === 0 && o.kind === 'parking' && <p className="px-2 pt-1 pb-0.5 text-xs font-medium text-muted-foreground">{t('search.groupParking')}</p>}
-              {i === firstPlace && <p className="px-2 pt-1 pb-0.5 text-xs font-medium text-muted-foreground">{t('search.groupNear')}</p>}
+              {i === 0 && o.kind === 'parking' && (
+                <p className="px-2 pt-1 pb-0.5 text-xs font-medium text-muted-foreground">
+                  {t('search.groupParking')}
+                </p>
+              )}
+              {i === firstPlace && (
+                <p className="px-2 pt-1 pb-0.5 text-xs font-medium text-muted-foreground">
+                  {t('search.groupNear')}
+                </p>
+              )}
               <button
                 type="button"
                 role="option"
@@ -150,17 +177,32 @@ export function PlaceSearchInput({
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => void pick(o)}
                 onMouseEnter={() => setActive(i)}
-                className={cn('flex w-full items-start gap-2 rounded px-2 py-1.5 text-left text-sm', i === active && 'bg-accent')}
+                className={cn(
+                  'flex w-full items-start gap-2 rounded px-2 py-1.5 text-left text-sm',
+                  i === active && 'bg-accent',
+                )}
               >
-                {o.kind === 'parking' ? <ParkingSquare className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden /> : <MapPin className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />}
+                {o.kind === 'parking' ? (
+                  <ParkingSquare className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
+                ) : (
+                  <MapPin className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
+                )}
                 <span className="min-w-0">
-                  <span className="block truncate font-medium">{o.kind === 'parking' ? o.item.name : o.item.title}</span>
-                  <span className="block truncate text-xs text-muted-foreground">{o.kind === 'parking' ? `${o.item.address}, ${o.item.city}` : o.item.subtitle}</span>
+                  <span className="block truncate font-medium">
+                    {o.kind === 'parking' ? o.item.name : o.item.title}
+                  </span>
+                  <span className="block truncate text-xs text-muted-foreground">
+                    {o.kind === 'parking' ? `${o.item.address}, ${o.item.city}` : o.item.subtitle}
+                  </span>
                 </span>
               </button>
             </li>
           ))}
-          {provider === 'google' && firstPlace >= 0 && <li className="px-2 pt-1 text-right text-[10px] text-muted-foreground">powered by Google</li>}
+          {provider === 'google' && firstPlace >= 0 && (
+            <li className="px-2 pt-1 text-right text-[10px] text-muted-foreground">
+              powered by Google
+            </li>
+          )}
         </ul>
       )}
     </div>

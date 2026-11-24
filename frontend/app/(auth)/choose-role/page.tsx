@@ -6,11 +6,11 @@ import { useEffect, useState } from 'react';
 import { AuthCard } from '@/shared/auth/auth-card';
 import { RequireAuth } from '@/shared/auth/require-auth';
 import { RolePicker } from '@/shared/auth/role-picker';
-import { Alert } from '@/shared/ui/alert';
 import { Button } from '@/shared/ui/button';
 import { api, ApiError, session, type AuthResult } from '@/shared/lib/api';
 import { homeFor } from '@/shared/lib/auth/role-home';
 import { useSession } from '@/shared/lib/auth/use-session';
+import { ErrorPopup } from '@/shared/ui/confirm-dialog';
 
 function ChooseRole() {
   const router = useRouter();
@@ -28,8 +28,10 @@ function ChooseRole() {
   return (
     <div className="grid gap-4">
       <RolePicker value={role} onChange={setRole} />
-      <p className="text-sm text-muted-foreground">This can't be changed later. Use a different email for the other account type.</p>
-      {error && <Alert variant="destructive">{error}</Alert>}
+      <p className="text-sm text-muted-foreground">
+        This can't be changed later. Use a different email for the other account type.
+      </p>
+      <ErrorPopup message={error} onClose={() => setError(null)} />
       <Button
         disabled={!role}
         loading={saving}

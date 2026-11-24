@@ -16,6 +16,7 @@ export const toSettingsDto = (s: PlatformSettings): PlatformSettingsDto => ({
   entryGraceMinutes: s.entryGraceMinutes,
   fewLeftThreshold: s.fewLeftThreshold,
   exitGraceMinutes: s.exitGraceMinutes,
+  noShowReleaseMinutes: s.noShowReleaseMinutes,
   updatedAt: s.updatedAt.toISOString(),
 });
 
