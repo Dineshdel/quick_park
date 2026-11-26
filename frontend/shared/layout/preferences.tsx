@@ -8,7 +8,7 @@ import { cn } from '@/shared/lib/utils';
 import { useTheme } from '@/shared/theme/theme';
 
 const CHROME_BTN =
-  'inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-sm text-chrome-foreground transition-colors hover:bg-chrome-hover hover:text-white';
+  'inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-sm text-chrome-foreground transition-colors hover:bg-chrome-hover hover:text-chrome-strong';
 
 /** Closes a popup on outside click or Escape. */
 function useDismiss(open: boolean, close: () => void) {
@@ -57,7 +57,7 @@ export function LanguageSelect() {
         <div
           role="menu"
           aria-label={t('ui.language')}
-          className="absolute right-0 z-50 mt-2 w-44 overflow-hidden rounded-xl border border-white/10 bg-chrome p-1 text-chrome-foreground shadow-xl"
+          className="absolute right-0 z-50 mt-2 w-44 overflow-hidden rounded-xl border border-chrome-line bg-chrome p-1 text-chrome-foreground shadow-xl"
         >
           {LOCALES.map((l) => (
             <button
@@ -70,8 +70,8 @@ export function LanguageSelect() {
                 setOpen(false);
               }}
               className={cn(
-                'flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-chrome-hover hover:text-white',
-                l.code === locale && 'bg-chrome-hover font-medium text-white',
+                'flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-chrome-hover hover:text-chrome-strong',
+                l.code === locale && 'bg-chrome-hover font-medium text-chrome-strong',
               )}
             >
               <span className="w-6 text-xs text-chrome-muted">{l.short}</span>

@@ -104,83 +104,108 @@ export function SearchBar({ compact = false }: { compact?: boolean }) {
     );
   };
 
-  return (
-    <form
+  const vehicleChips = (
+    <div
       className={cn(
-        'grid w-full gap-3 text-left',
-        !compact && 'shadow-premium-lg rounded-2xl border bg-card p-6',
+        'grid gap-1.5',
+        // On the results page the chips stay pinned under the header while the list scrolls.
+        compact &&
+          'sticky top-14 z-30 -mx-4 flex min-w-0 items-center gap-3 border-b border-border/60 bg-background/85 px-4 py-2 backdrop-blur-md',
       )}
-      onSubmit={(e) => {
-        e.preventDefault();
-        go({ q: text.trim() });
-      }}
     >
-      <div className="grid gap-1.5">
-        <p className="text-sm font-medium">{t('search.yourVehicle')}</p>
-        <div
-          className="flex flex-wrap gap-2"
-          role="radiogroup"
-          aria-label={t('search.yourVehicle')}
-        >
-          {[{ id: '', name: t('search.any'), code: '', icon: null }, ...(types.data ?? [])].map(
-            (vt) => {
-              const Icon = vt.icon ? ICONS[vt.icon] : null;
-              const on = vehicleType === vt.id;
-              return (
-                <button
-                  key={vt.id || 'any'}
-                  type="button"
-                  role="radio"
-                  aria-checked={on}
-                  onClick={() => pickType(vt.id)}
-                  className={cn(
-                    'inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-sm transition-colors',
-                    on ? 'border-primary bg-primary text-primary-foreground' : 'hover:bg-accent',
-                  )}
-                >
-                  {Icon && <Icon className="size-4" aria-hidden />}
-                  {vt.code && `vehicle.${vt.code}` in MESSAGES.en
-                    ? t(`vehicle.${vt.code}` as MessageKey)
-                    : vt.name}
-                </button>
-              );
-            },
-          )}
-        </div>
+      <p className={cn('text-sm font-medium', compact && 'hidden shrink-0 sm:block')}>
+        {t('search.yourVehicle')}
+      </p>
+      <div
+        className={cn(
+          'flex gap-2',
+          compact
+            ? 'min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'
+            : 'flex-wrap',
+        )}
+        role="radiogroup"
+        aria-label={t('search.yourVehicle')}
+      >
+        {[{ id: '', name: t('search.any'), code: '', icon: null }, ...(types.data ?? [])].map(
+          (vt) => {
+            const Icon = vt.icon ? ICONS[vt.icon] : null;
+            const on = vehicleType === vt.id;
+            return (
+              <button
+                key={vt.id || 'any'}
+                type="button"
+                role="radio"
+                aria-checked={on}
+                onClick={() => pickType(vt.id)}
+                className={cn(
+                  'inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-sm whitespace-nowrap transition-colors',
+                  on
+                    ? 'border-primary bg-primary text-primary-foreground'
+                    : 'bg-card hover:bg-accent',
+                )}
+              >
+                {Icon && <Icon className="size-4" aria-hidden />}
+                {vt.code && `vehicle.${vt.code}` in MESSAGES.en
+                  ? t(`vehicle.${vt.code}` as MessageKey)
+                  : vt.name}
+              </button>
+            );
+          },
+        )}
       </div>
+    </div>
+  );
 
-      <div className="grid gap-2 md:grid-cols-[1fr_auto_auto_auto]">
-        <PlaceSearchInput
-          value={text}
-          onChange={setText}
-          vehicleType={vehicleType || undefined}
-          onParking={(p) =>
-            router.push(`/p/${p.slug}${vehicleType ? `?vehicleType=${vehicleType}` : ''}`)
-          }
-          onPlace={(pl) => go({ lat: pl.lat.toFixed(5), lng: pl.lng.toFixed(5), place: pl.label })}
-          onText={(q) => go({ q })}
-        />
-        <Select
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
-          aria-label="Kind of parking"
-          className="md:w-40"
-        >
-          <option value="">{t('search.anyKind')}</option>
-          {cats.data?.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </Select>
-        <Button type="submit">
-          <Search /> {t('search.search')}
-        </Button>
-        <Button type="button" variant="outline" loading={locating} onClick={nearMe}>
-          <LocateFixed /> {t('search.nearMe')}
-        </Button>
-      </div>
-      {geoError && <p className="text-sm text-destructive">{geoError}</p>}
-    </form>
+  return (
+    <>
+      {compact && vehicleChips}
+      <form
+        className={cn(
+          'grid w-full gap-3 text-left',
+          !compact && 'shadow-premium-lg rounded-2xl border bg-card p-6',
+        )}
+        onSubmit={(e) => {
+          e.preventDefault();
+          go({ q: text.trim() });
+        }}
+      >
+        {!compact && vehicleChips}
+
+        <div className="grid gap-2 md:grid-cols-[1fr_auto_auto_auto]">
+          <PlaceSearchInput
+            value={text}
+            onChange={setText}
+            vehicleType={vehicleType || undefined}
+            onParking={(p) =>
+              router.push(`/p/${p.slug}${vehicleType ? `?vehicleType=${vehicleType}` : ''}`)
+            }
+            onPlace={(pl) =>
+              go({ lat: pl.lat.toFixed(5), lng: pl.lng.toFixed(5), place: pl.label })
+            }
+            onText={(q) => go({ q })}
+          />
+          <Select
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            aria-label="Kind of parking"
+            className="md:w-40"
+          >
+            <option value="">{t('search.anyKind')}</option>
+            {cats.data?.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </Select>
+          <Button type="submit">
+            <Search /> {t('search.search')}
+          </Button>
+          <Button type="button" variant="outline" loading={locating} onClick={nearMe}>
+            <LocateFixed /> {t('search.nearMe')}
+          </Button>
+        </div>
+        {geoError && <p className="text-sm text-destructive">{geoError}</p>}
+      </form>
+    </>
   );
 }

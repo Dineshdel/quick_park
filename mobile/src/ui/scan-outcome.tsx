@@ -5,7 +5,7 @@ import { View } from 'react-native';
 import { fmtDur, fmtTime, formatRupees } from '../lib/format';
 import { useGate } from '../lib/gate';
 import { useDialog } from './dialog';
-import { Button, Card, Field, Input, KV, Row, Select, Text } from './kit';
+import { Button, Card, Field, Input, KV, Notice, Row, Select, Text } from './kit';
 import { useTheme } from './theme';
 
 /** How the check-out amount was worked out: booked until, free grace, stayed extra, hours × rate. */
@@ -101,7 +101,7 @@ function WalkInForm({
 export function ScanOutcome() {
   const { theme } = useTheme();
   const { confirm } = useDialog();
-  const { outcome, collect, busy, place, clearOutcome } = useGate();
+  const { outcome, collect, sendOnline, busy, place, clearOutcome } = useGate();
   if (!outcome) return null;
 
   if (outcome.kind === 'error') {
@@ -136,7 +136,79 @@ export function ScanOutcome() {
         {r.booking ? ` · ${r.booking.code} until ${fmtTime(r.booking.endAt)}` : ''}
       </Text>
       {r.charges && <ChargeBreakdown c={r.charges} />}
-      {due ? (
+      {due && r.onlineRequest ? (
+        <>
+          <Notice tone="info">
+            {`Waiting for the driver to pay ${formatRupees(r.onlineRequest.amountPaise)} online (sent ${fmtTime(r.onlineRequest.requestedAt)}). This updates by itself.`}
+          </Notice>
+          <Row>
+            <Button
+              title="Took cash instead"
+              variant="outline"
+              loading={busy}
+              style={{ flex: 1 }}
+              onPress={async () => {
+                if (
+                  await confirm({
+                    title: `Received ${formatRupees(r.amountDuePaise)} in cash?`,
+                    description: 'The online request is cancelled and the vehicle is checked out.',
+                    confirmLabel: 'Confirm exit',
+                  })
+                )
+                  await collect(r.sessionId, 'CASH');
+              }}
+            />
+            <Button
+              title="Send again"
+              variant="ghost"
+              disabled={busy}
+              style={{ flex: 1 }}
+              onPress={() => void sendOnline(r.sessionId)}
+            />
+          </Row>
+        </>
+      ) : due && r.canPayOnline ? (
+        <>
+          <Text variant="title">Collect {formatRupees(r.amountDuePaise)}</Text>
+          <Text variant="muted">How will they pay?</Text>
+          <Row>
+            <Button
+              title="Cash"
+              icon="cash-outline"
+              loading={busy}
+              style={{ flex: 1 }}
+              onPress={async () => {
+                if (
+                  await confirm({
+                    title: `Received ${formatRupees(r.amountDuePaise)} in cash?`,
+                    description: 'The vehicle is then checked out.',
+                    confirmLabel: 'Confirm exit',
+                  })
+                )
+                  await collect(r.sessionId, 'CASH');
+              }}
+            />
+            <Button
+              title="Online"
+              icon="phone-portrait-outline"
+              variant="outline"
+              disabled={busy}
+              style={{ flex: 1 }}
+              onPress={async () => {
+                if (
+                  await confirm({
+                    title: `Send ${formatRupees(r.amountDuePaise)} to ${r.customerName ?? 'the driver'}?`,
+                    description:
+                      'They get a notification in Quick Park to pay online. The vehicle is checked out automatically once paid.',
+                    confirmLabel: 'Send to driver',
+                  })
+                )
+                  await sendOnline(r.sessionId);
+              }}
+            />
+          </Row>
+        </>
+      ) : due ? (
         <>
           <Text variant="title">Collect {formatRupees(r.amountDuePaise)}</Text>
           <Row>

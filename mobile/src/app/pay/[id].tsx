@@ -51,7 +51,10 @@ export default function PayScreen() {
         new Error(m.reason ?? 'Payment failed. You can try again.'),
         'Payment failed',
       );
+    // Used for bookings and for overstay (gate) charges: refresh whichever this was.
     await qc.invalidateQueries({ queryKey: ['booking', id] });
+    await qc.invalidateQueries({ queryKey: ['gate-charge', id] });
+    void qc.invalidateQueries({ queryKey: ['notifications'] });
     router.back();
   };
 

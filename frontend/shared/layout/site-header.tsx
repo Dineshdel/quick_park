@@ -8,22 +8,23 @@ import { logout } from '@/shared/lib/api';
 import { homeFor } from '@/shared/lib/auth/role-home';
 import { useSession } from '@/shared/lib/auth/use-session';
 import { useT } from '@/shared/i18n/i18n';
+import { NotificationBell } from './notification-bell';
 import { LanguageSelect, ThemeToggle } from './preferences';
 
-const ON_CHROME = 'text-chrome-foreground hover:bg-chrome-hover hover:text-white';
+const ON_CHROME = 'text-chrome-foreground hover:bg-chrome-hover hover:text-chrome-strong';
 
 export function SiteHeader() {
   const s = useSession();
   const router = useRouter();
   const t = useT();
   return (
-    <header className="bg-midnight sticky top-0 z-[1000] text-chrome-foreground shadow-lg shadow-black/10 print:hidden">
+    <header className="bg-midnight sticky top-0 z-[1000] text-chrome-foreground shadow-[0_8px_24px_-12px_oklch(0.4_0.15_248/0.25)] print:hidden">
       <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-2 px-4">
         <Link href="/" className="flex items-center gap-2.5">
           <span className="bg-gold-gradient flex size-8 items-center justify-center rounded-lg text-gold-foreground shadow-md shadow-black/30">
             <Car className="size-[18px]" aria-hidden />
           </span>
-          <span className="font-serif text-lg font-semibold tracking-tight whitespace-nowrap text-white">
+          <span className="font-serif text-lg font-semibold tracking-tight whitespace-nowrap text-chrome-strong">
             Quick <span className="text-gold-gradient">Park</span>
           </span>
         </Link>
@@ -32,6 +33,7 @@ export function SiteHeader() {
           <ThemeToggle />
           {s.status === 'authenticated' ? (
             <>
+              {s.user.role === 'VEHICLE_OWNER' && <NotificationBell className={ON_CHROME} />}
               <Button
                 variant="ghost"
                 size="sm"
@@ -51,7 +53,7 @@ export function SiteHeader() {
               <Button
                 variant="ghost"
                 size="sm"
-                className="border border-chrome-muted/40 text-chrome-foreground hover:bg-chrome-hover hover:text-white"
+                className="border border-chrome-muted/40 text-chrome-foreground hover:bg-chrome-hover hover:text-chrome-strong"
                 onClick={async () => {
                   await logout();
                   router.push('/');

@@ -1,12 +1,16 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Redirect, Tabs } from 'expo-router';
 import { useSession } from '@/lib/hooks';
+import { NotificationBell, useNotifications } from '@/ui/notification-bell';
 import { useTheme } from '@/ui/theme';
 
 /** Driver (vehicle owner) app: find parking, bookings, vehicles, account. */
 export default function DriverTabs() {
   const s = useSession();
   const { theme } = useTheme();
+  const unread = useNotifications(
+    s.status === 'authenticated' && s.user.role === 'VEHICLE_OWNER',
+  ).data?.unread ?? 0;
   if (s.status === 'anonymous') return <Redirect href="/login" />;
   if (s.status === 'authenticated' && s.user.role !== 'VEHICLE_OWNER') return <Redirect href="/" />;
   const icon = (name: React.ComponentProps<typeof Ionicons>['name']) =>
@@ -23,6 +27,7 @@ export default function DriverTabs() {
         headerTintColor: theme.text,
         headerTitleStyle: { fontWeight: '700' },
         sceneStyle: { backgroundColor: theme.background },
+        headerRight: () => <NotificationBell />,
       }}
     >
       <Tabs.Screen
@@ -40,6 +45,15 @@ export default function DriverTabs() {
       <Tabs.Screen
         name="vehicles"
         options={{ title: 'My vehicles', tabBarLabel: 'Vehicles', tabBarIcon: icon('car-outline') }}
+      />
+      <Tabs.Screen
+        name="notifications"
+        options={{
+          title: 'Notifications',
+          tabBarLabel: 'Alerts',
+          tabBarIcon: icon('notifications-outline'),
+          tabBarBadge: unread ? (unread > 9 ? '9+' : unread) : undefined,
+        }}
       />
       <Tabs.Screen
         name="account"

@@ -49,7 +49,8 @@ const en = {
   'home.titleBefore': 'Park without the ',
   'home.titleAccent': 'search',
   'home.titleAfter': '',
-  'home.subtitle': 'Reserve a space near you or in any city, by the hour, day, week, month or year, and drive straight in with a QR pass.',
+  'home.subtitle':
+    'Reserve a space near you or in any city, by the hour, day, week, month or year, and drive straight in with a QR pass.',
   'home.hl1': 'Search by place or near you',
   'home.hl2': 'Hourly to yearly plans',
   'home.hl3': 'Refunds as per policy',
@@ -64,8 +65,15 @@ const en = {
   'home.ownerBefore': 'Own a parking ',
   'home.ownerAccent': 'space',
   'home.ownerAfter': '?',
-  'home.ownerText': 'List it on Quick Park, take bookings online and scan cars in at the gate from any phone.',
+  'home.ownerText':
+    'List it on Quick Park, take bookings online and scan cars in at the gate from any phone.',
   'home.ownerCta': 'List your parking',
+  'home.chipPass': 'QR pass ready',
+  'home.chipLive': 'Live free slots',
+  'home.browseTitle': 'Browse by place',
+  'home.popularTitle': 'Popular parking',
+  'home.seeAll': 'See all',
+  'home.freeParking': 'Free parking',
 
   // footer
   'footer.tagline': 'Find, book and pay for parking in minutes. Enter with a QR code.',
@@ -79,7 +87,8 @@ const en = {
   'footer.ownerDashboard': 'Owner dashboard',
   'footer.gateScanner': 'Gate scanner',
   'footer.profile': 'Profile',
-  'footer.copyright': '© {year} Quick Park. All prices in Indian rupees, including taxes where applicable.',
+  'footer.copyright':
+    '© {year} Quick Park. All prices in Indian rupees, including taxes where applicable.',
 
   // sign-in panel
   'auth.taglineBefore': 'Parking, ',
@@ -129,6 +138,7 @@ const en = {
   'side.kyc': 'Business & KYC',
   'side.findParking': 'Find parking',
   'side.myBookings': 'My bookings',
+  'side.notifications': 'Notifications',
   'side.myVehicles': 'My vehicles',
   'side.profile': 'Profile',
 };
@@ -170,25 +180,36 @@ const ta: Dict = {
   'home.titleBefore': '',
   'home.titleAccent': 'தேடல்',
   'home.titleAfter': ' இல்லாத பார்க்கிங்',
-  'home.subtitle': 'அருகிலோ வேறு நகரத்திலோ, மணி, நாள், வாரம், மாதம் அல்லது ஆண்டுக்கு இடத்தை முன்பதிவு செய்து, QR பாஸுடன் நேராக உள்ளே செல்லுங்கள்.',
+  'home.subtitle':
+    'அருகிலோ வேறு நகரத்திலோ, மணி, நாள், வாரம், மாதம் அல்லது ஆண்டுக்கு இடத்தை முன்பதிவு செய்து, QR பாஸுடன் நேராக உள்ளே செல்லுங்கள்.',
   'home.hl1': 'இடம் அல்லது அருகில் தேடுங்கள்',
   'home.hl2': 'மணி முதல் ஆண்டு வரை திட்டங்கள்',
   'home.hl3': 'கொள்கைப்படி பணம் திருப்பம்',
   'home.stepsKicker': 'ஒன்று, இரண்டு, மூன்று',
   'home.stepsTitle': 'எப்படி வேலை செய்கிறது',
   'home.step1Title': 'தேடு',
-  'home.step1Text': 'அருகிலோ நீங்கள் செல்லும் இடத்திலோ தேடி, உங்கள் நேரத்துக்கான காலி இடங்களைப் பாருங்கள்.',
+  'home.step1Text':
+    'அருகிலோ நீங்கள் செல்லும் இடத்திலோ தேடி, உங்கள் நேரத்துக்கான காலி இடங்களைப் பாருங்கள்.',
   'home.step2Title': 'முன்பதிவு',
-  'home.step2Text': 'மணி, நாள், வாரம், மாதம் அல்லது நிகழ்ச்சி பார்க்கிங்கைத் தேர்ந்தெடுத்து ஆன்லைனில் செலுத்துங்கள்.',
+  'home.step2Text':
+    'மணி, நாள், வாரம், மாதம் அல்லது நிகழ்ச்சி பார்க்கிங்கைத் தேர்ந்தெடுத்து ஆன்லைனில் செலுத்துங்கள்.',
   'home.step3Title': 'பார்க்',
   'home.step3Text': 'வாயிலில் QR பாஸைக் காட்டுங்கள். பணம் வேண்டாம், இடம் தேட வேண்டாம்.',
   'home.ownerBefore': 'உங்களிடம் பார்க்கிங் ',
   'home.ownerAccent': 'இடம்',
   'home.ownerAfter': ' உள்ளதா?',
-  'home.ownerText': 'Quick Park-இல் பட்டியலிட்டு, ஆன்லைனில் முன்பதிவுகளைப் பெற்று, எந்த போனிலும் வாயிலில் வாகனங்களை ஸ்கேன் செய்யுங்கள்.',
+  'home.ownerText':
+    'Quick Park-இல் பட்டியலிட்டு, ஆன்லைனில் முன்பதிவுகளைப் பெற்று, எந்த போனிலும் வாயிலில் வாகனங்களை ஸ்கேன் செய்யுங்கள்.',
   'home.ownerCta': 'உங்கள் பார்க்கிங்கை பட்டியலிடு',
+  'home.chipPass': 'QR பாஸ் தயார்',
+  'home.chipLive': 'நேரடி காலி இடங்கள்',
+  'home.browseTitle': 'இட வகை வாரியாக',
+  'home.popularTitle': 'பிரபல பார்க்கிங்',
+  'home.seeAll': 'அனைத்தும்',
+  'home.freeParking': 'இலவச பார்க்கிங்',
 
-  'footer.tagline': 'சில நிமிடங்களில் பார்க்கிங்கைத் தேடி, முன்பதிவு செய்து, செலுத்துங்கள். QR குறியீட்டுடன் நுழையுங்கள்.',
+  'footer.tagline':
+    'சில நிமிடங்களில் பார்க்கிங்கைத் தேடி, முன்பதிவு செய்து, செலுத்துங்கள். QR குறியீட்டுடன் நுழையுங்கள்.',
   'footer.drivers': 'ஓட்டுநர்கள்',
   'footer.owners': 'பார்க்கிங் உரிமையாளர்கள்',
   'footer.account': 'கணக்கு',
@@ -199,7 +220,8 @@ const ta: Dict = {
   'footer.ownerDashboard': 'உரிமையாளர் டாஷ்போர்டு',
   'footer.gateScanner': 'வாயில் ஸ்கேனர்',
   'footer.profile': 'சுயவிவரம்',
-  'footer.copyright': '© {year} Quick Park. அனைத்து விலைகளும் இந்திய ரூபாயில், பொருந்தும் வரிகள் உட்பட.',
+  'footer.copyright':
+    '© {year} Quick Park. அனைத்து விலைகளும் இந்திய ரூபாயில், பொருந்தும் வரிகள் உட்பட.',
 
   'auth.taglineBefore': 'பார்க்கிங், ',
   'auth.taglineAccent': 'எளிதாக',
@@ -247,6 +269,7 @@ const ta: Dict = {
   'side.kyc': 'வணிகம் & KYC',
   'side.findParking': 'பார்க்கிங் தேடு',
   'side.myBookings': 'என் முன்பதிவுகள்',
+  'side.notifications': 'அறிவிப்புகள்',
   'side.myVehicles': 'என் வாகனங்கள்',
   'side.profile': 'சுயவிவரம்',
 };
@@ -285,7 +308,8 @@ const hi: Dict = {
   'home.titleBefore': 'बिना ',
   'home.titleAccent': 'खोज',
   'home.titleAfter': ' के पार्किंग',
-  'home.subtitle': 'अपने पास या किसी भी शहर में घंटे, दिन, हफ़्ते, महीने या साल के लिए जगह बुक करें और QR पास से सीधे अंदर जाएँ।',
+  'home.subtitle':
+    'अपने पास या किसी भी शहर में घंटे, दिन, हफ़्ते, महीने या साल के लिए जगह बुक करें और QR पास से सीधे अंदर जाएँ।',
   'home.hl1': 'जगह से या अपने पास खोजें',
   'home.hl2': 'घंटे से साल तक के प्लान',
   'home.hl3': 'नीति के अनुसार रिफ़ंड',
@@ -300,8 +324,15 @@ const hi: Dict = {
   'home.ownerBefore': 'क्या आपके पास पार्किंग की ',
   'home.ownerAccent': 'जगह',
   'home.ownerAfter': ' है?',
-  'home.ownerText': 'उसे Quick Park पर लिस्ट करें, ऑनलाइन बुकिंग लें और किसी भी फ़ोन से गेट पर गाड़ियाँ स्कैन करें।',
+  'home.ownerText':
+    'उसे Quick Park पर लिस्ट करें, ऑनलाइन बुकिंग लें और किसी भी फ़ोन से गेट पर गाड़ियाँ स्कैन करें।',
   'home.ownerCta': 'अपनी पार्किंग लिस्ट करें',
+  'home.chipPass': 'QR पास तैयार',
+  'home.chipLive': 'लाइव खाली जगहें',
+  'home.browseTitle': 'जगह के प्रकार से देखें',
+  'home.popularTitle': 'लोकप्रिय पार्किंग',
+  'home.seeAll': 'सभी देखें',
+  'home.freeParking': 'मुफ़्त पार्किंग',
 
   'footer.tagline': 'मिनटों में पार्किंग खोजें, बुक करें और भुगतान करें। QR कोड से प्रवेश करें।',
   'footer.drivers': 'ड्राइवर',
@@ -362,6 +393,7 @@ const hi: Dict = {
   'side.kyc': 'व्यवसाय और KYC',
   'side.findParking': 'पार्किंग खोजें',
   'side.myBookings': 'मेरी बुकिंग',
+  'side.notifications': 'सूचनाएं',
   'side.myVehicles': 'मेरे वाहन',
   'side.profile': 'प्रोफ़ाइल',
 };

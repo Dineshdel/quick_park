@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { formatRupees } from '@qp/types';
+import { formatRupees, type NotificationListDto } from '@qp/types';
 import { formatPlate } from '@qp/validation';
 import { type Env } from '../config/env';
 import { webLink } from '../config/web-link';
@@ -158,6 +158,63 @@ export class NotificationsService {
             : '',
       });
     });
+  }
+
+  // ---------- in-app (bell menu) ----------
+
+  /** Adds an in-app notification. Never throws. */
+  inApp(
+    userId: string,
+    n: {
+      type: string;
+      title: string;
+      body: string;
+      link?: string | null;
+      paymentId?: string | null;
+      amountPaise?: number | null;
+    },
+  ) {
+    return this.safe('inApp', () => this.prisma.notification.create({ data: { userId, ...n } }));
+  }
+
+  async list(userId: string): Promise<NotificationListDto> {
+    const [rows, unread] = await Promise.all([
+      this.prisma.notification.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        take: 30,
+      }),
+      this.prisma.notification.count({ where: { userId, readAt: null } }),
+    ]);
+    return {
+      unread,
+      items: rows.map((n) => ({
+        id: n.id,
+        type: n.type,
+        title: n.title,
+        body: n.body,
+        link: n.link,
+        paymentId: n.paymentId,
+        amountPaise: n.amountPaise,
+        read: !!n.readAt,
+        createdAt: n.createdAt.toISOString(),
+      })),
+    };
+  }
+
+  async markRead(userId: string, id?: string) {
+    await this.prisma.notification.updateMany({
+      where: { userId, readAt: null, ...(id ? { id } : {}) },
+      data: { readAt: new Date() },
+    });
+    return { ok: true };
+  }
+
+  /** Marks every notification about this payment as read (e.g. once it is paid or cancelled). */
+  async markPaymentRead(paymentId: string) {
+    await this.prisma.notification
+      .updateMany({ where: { paymentId, readAt: null }, data: { readAt: new Date() } })
+      .catch(() => undefined);
   }
 
   kycDecision(ownerId: string, approved: boolean, reason?: string) {

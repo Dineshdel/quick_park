@@ -47,7 +47,7 @@ export function SiteFooter() {
             <span className="bg-gold-gradient flex size-8 items-center justify-center rounded-lg text-gold-foreground">
               <Car className="size-[18px]" aria-hidden />
             </span>
-            <span className="font-serif text-lg font-semibold text-white">
+            <span className="font-serif text-lg font-semibold text-chrome-strong">
               Quick <span className="text-gold-gradient">Park</span>
             </span>
           </Link>
@@ -55,15 +55,13 @@ export function SiteFooter() {
         </div>
         {COLUMNS.map((c) => (
           <div key={c.title} className="grid content-start gap-3">
-            <p className="text-[11px] font-semibold tracking-[0.14em] text-gold-light uppercase">
-              {t(c.title)}
-            </p>
+            <p className="text-sm font-semibold text-chrome-strong">{t(c.title)}</p>
             <ul className="grid gap-2 text-sm">
               {c.links.map((l) => (
                 <li key={l.href}>
                   <Link
                     href={l.href}
-                    className="text-chrome-foreground/80 transition-colors hover:text-white"
+                    className="text-chrome-foreground/80 transition-colors hover:text-chrome-strong"
                   >
                     {t(l.label)}
                   </Link>
@@ -73,7 +71,7 @@ export function SiteFooter() {
           </div>
         ))}
       </div>
-      <div className="border-t border-white/10">
+      <div className="border-t border-chrome-line">
         <p className="mx-auto max-w-6xl px-4 py-5 text-xs text-chrome-muted">
           {t('footer.copyright', { year: new Date().getFullYear() })}
         </p>

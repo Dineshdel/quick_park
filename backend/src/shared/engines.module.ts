@@ -7,6 +7,7 @@ import { type Env } from './config/env';
 import { FilesController } from './files/files.controller';
 import { StorageService } from './files/storage.service';
 import { MastersModule } from './masters/masters.module';
+import { NotificationsController } from './notifications/notifications.controller';
 import { NotificationsService } from './notifications/notifications.service';
 import { PassService } from './pass/pass.service';
 import { MockPaymentProvider, PAYMENT_PROVIDER, RazorpayPaymentProvider } from './payments/payment-provider';
@@ -26,7 +27,7 @@ import { SCHEDULER_QUEUE, SchedulerProcessor, SchedulerService } from './schedul
 @Global()
 @Module({
   imports: [MastersModule, BullModule.registerQueue({ name: SCHEDULER_QUEUE })],
-  controllers: [FilesController, PaymentsController, SearchController],
+  controllers: [FilesController, PaymentsController, SearchController, NotificationsController],
   providers: [
     StorageService,
     AuditService,

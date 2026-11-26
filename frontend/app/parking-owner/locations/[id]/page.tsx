@@ -3,7 +3,7 @@
 import type { OwnerLocationDto, PlanType } from '@qp/types';
 import { PLAN_RULES } from '@qp/validation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, ExternalLink, Trash2, Upload } from 'lucide-react';
+import { ExternalLink, Trash2, Upload } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useRef, useState } from 'react';
@@ -656,11 +656,6 @@ function OwnerCalendar({ l }: { l: OwnerLocationDto }) {
 export default function LocationPage() {
   return (
     <div className="mx-auto grid max-w-6xl gap-4 px-4 py-8">
-      <Button variant="ghost" size="sm" asChild className="justify-self-start">
-        <Link href="/parking-owner/locations">
-          <ArrowLeft /> My places
-        </Link>
-      </Button>
       <Suspense>
         <LocationManager />
       </Suspense>

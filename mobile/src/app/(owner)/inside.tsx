@@ -68,6 +68,9 @@ export default function Inside() {
               ) : late ? (
                 <Badge label="Overstaying" tone="danger" />
               ) : null}
+              {s.onlineRequestPaise ? (
+                <Badge label={`Online ${formatRupees(s.onlineRequestPaise)} requested`} tone="info" />
+              ) : null}
             </Row>
             <Text variant="small">
               In {fmtTime(s.entryAt)}

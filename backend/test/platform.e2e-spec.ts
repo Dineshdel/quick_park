@@ -538,6 +538,108 @@ describe('M10 gate access', () => {
     expect(s).toMatchObject({ overstayAmountPaise: 10000, paymentMethod: 'CASH' });
   });
 
+  it('overstay sent online: driver is notified, pays, and the vehicle is checked out', async () => {
+    const v = await as(customer)
+      .post('/vehicles', { vehicleTypeId: car, plateNumber: 'KA05GH0005' })
+      .expect(201);
+    const id = await bookAndPay(customer, {
+      locationId,
+      vehicleId: v.body.id,
+      planType: 'HOURLY',
+      startAt: inMinutes(1),
+      quantity: 1,
+    });
+    const code = (await as(customer).get(`/bookings/${id}`).expect(200)).body.code as string;
+    await as(owner).post('/access/scan', { token: code, locationId, direction: 'ENTRY' }).expect(200);
+    await ctx.prisma.booking.update({
+      where: { id },
+      data: { startAt: new Date(Date.now() - 3 * 3_600_000), endAt: new Date(Date.now() - 50 * 60_000) },
+    });
+    const out = await as(owner)
+      .post('/access/scan', { token: code, locationId, direction: 'EXIT' })
+      .expect(200);
+    expect(out.body).toMatchObject({ amountDuePaise: 5000, canPayOnline: true, onlineRequest: null });
+    const sessionId = out.body.sessionId as string;
+    const paidBefore = (await as(customer).get(`/bookings/${id}`).expect(200)).body;
+
+    // Gate chooses "Online": the driver gets a notification with the amount.
+    const sent = await as(owner).post(`/access/sessions/${sessionId}/request-online`, {}).expect(200);
+    expect(sent.body.onlineRequest).toMatchObject({ amountPaise: 5000 });
+    const inside = await as(owner).get(`/access/sessions?locationId=${locationId}`).expect(200);
+    expect(inside.body.find((x: { id: string }) => x.id === sessionId)).toMatchObject({
+      onlineRequestPaise: 5000,
+    });
+    const list = await as(customer).get('/notifications').expect(200);
+    const n = list.body.items.find((x: { type: string }) => x.type === 'GATE_CHARGE_DUE');
+    expect(n).toMatchObject({ amountPaise: 5000, read: false });
+    expect(list.body.unread).toBeGreaterThanOrEqual(1);
+    const paymentId = n.paymentId as string;
+    expect(n.link).toBe(`/vehicle-owner/pay/${paymentId}`);
+
+    // Only that driver can see it.
+    await as(otherOwner).get(`/payments/gate/${paymentId}`).expect(403);
+    const charge = await as(customer).get(`/payments/gate/${paymentId}`).expect(200);
+    expect(charge.body).toMatchObject({ status: 'PENDING', amountPaise: 5000, plateNumber: 'KA05GH0005' });
+
+    // Driver pays → session closed by itself, booking completed, "paid" notification.
+    await as(customer)
+      .post('/payments/mock/pay', { orderId: charge.body.order.orderId, outcome: 'success' })
+      .expect(200);
+    const s = await ctx.prisma.parkingSession.findUniqueOrThrow({ where: { id: sessionId } });
+    expect(s.exitAt).not.toBeNull();
+    expect(s).toMatchObject({ overstayAmountPaise: 5000, paymentMethod: 'RAZORPAY' });
+    expect((await as(customer).get(`/bookings/${id}`)).body.status).toBe('COMPLETED');
+    expect((await as(customer).get(`/payments/gate/${paymentId}`)).body.status).toBe('PAID');
+    const after = await as(customer).get('/notifications').expect(200);
+    expect(after.body.items[0]).toMatchObject({ type: 'GATE_CHARGE_PAID', paymentId });
+    expect(after.body.items.find((x: { id: string }) => x.id === n.id).read).toBe(true);
+    // The overstay payment is gate money, not booking money (cancellation refunds etc. ignore it).
+    const b = (await as(customer).get(`/bookings/${id}`).expect(200)).body;
+    expect(b.amountPaise).toBe(paidBefore.amountPaise);
+  });
+
+  it('cash at the gate cancels a pending online request; a late online payment is refunded', async () => {
+    const v = await as(customer)
+      .post('/vehicles', { vehicleTypeId: car, plateNumber: 'KA06JK0006' })
+      .expect(201);
+    const id = await bookAndPay(customer, {
+      locationId,
+      vehicleId: v.body.id,
+      planType: 'HOURLY',
+      startAt: inMinutes(1),
+      quantity: 1,
+    });
+    const code = (await as(customer).get(`/bookings/${id}`).expect(200)).body.code as string;
+    await as(owner).post('/access/scan', { token: code, locationId, direction: 'ENTRY' }).expect(200);
+    await ctx.prisma.booking.update({
+      where: { id },
+      data: { startAt: new Date(Date.now() - 3 * 3_600_000), endAt: new Date(Date.now() - 50 * 60_000) },
+    });
+    const out = await as(owner)
+      .post('/access/scan', { token: code, locationId, direction: 'EXIT' })
+      .expect(200);
+    const sent = await as(owner)
+      .post(`/access/sessions/${out.body.sessionId}/request-online`, {})
+      .expect(200);
+    const paymentId = sent.body.onlineRequest.paymentId as string;
+    const order = (await as(customer).get(`/payments/gate/${paymentId}`).expect(200)).body.order;
+    await as(owner)
+      .post(`/access/sessions/${out.body.sessionId}/exit`, { paymentMethod: 'CASH' })
+      .expect(200);
+    expect((await as(customer).get(`/payments/gate/${paymentId}`)).body.status).toBe('CANCELLED');
+    // The driver pays anyway (stale screen): the money goes back automatically.
+    await as(customer)
+      .post('/payments/mock/pay', { orderId: order.orderId, outcome: 'success' })
+      .expect(200);
+    const refunds = await ctx.prisma.refund.findMany({ where: { paymentId } });
+    expect(refunds).toHaveLength(1);
+    expect(refunds[0]).toMatchObject({ amountPaise: 5000, status: 'PROCESSED' });
+    const s = await ctx.prisma.parkingSession.findUniqueOrThrow({
+      where: { id: out.body.sessionId },
+    });
+    expect(s.paymentMethod).toBe('CASH');
+  });
+
   it('sticker without a booking suggests a walk-in; walk-in + typed-plate exit with charge', async () => {
     const v = await as(customer)
       .post('/vehicles', { vehicleTypeId: car, plateNumber: 'MH12XY9999' })
@@ -803,18 +905,24 @@ describe('M11 owner dashboard + earnings, M12 admin', () => {
     const e = await as(owner)
       .get(`/owner/earnings?from=${new Date(Date.now() - 86_400_000).toISOString()}`)
       .expect(200);
+    // Booking money only: overstay paid online is gate money (counted in overstayPaise).
     const paid = await ctx.prisma.payment.aggregate({
-      where: { status: 'PAID', booking: { locationId } },
+      where: { status: 'PAID', purpose: { not: 'GATE_CHARGE' }, booking: { locationId } },
       _sum: { amountPaise: true },
     });
     const refunded = await ctx.prisma.refund.aggregate({
-      where: { status: 'PROCESSED', booking: { locationId } },
+      where: {
+        status: 'PROCESSED',
+        payment: { purpose: { not: 'GATE_CHARGE' } },
+        booking: { locationId },
+      },
       _sum: { amountPaise: true },
     });
     expect(e.body.grossPaise).toBe(paid._sum.amountPaise);
     expect(e.body.refundPaise).toBe(refunded._sum.amountPaise);
     expect(e.body.netPaise).toBe(e.body.grossPaise - e.body.refundPaise - e.body.commissionPaise);
-    expect(e.body.overstayPaise).toBe(10000);
+    // ₹100 cash (M10) + ₹50 paid online + ₹50 cash after an online request was cancelled.
+    expect(e.body.overstayPaise).toBe(20000);
     expect(e.body.walkInPaise).toBe(4000);
     const d = await as(owner).get('/owner/dashboard').expect(200);
     expect(d.body.daily).toHaveLength(30);

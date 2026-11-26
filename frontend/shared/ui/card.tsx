@@ -1,10 +1,14 @@
 import * as React from 'react';
 import { cn } from '@/shared/lib/utils';
 
+/** Cards sit on the page with depth (top light + layered shadow) and lift slightly when hovered. */
 export function Card({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
-      className={cn('rounded-xl border bg-card text-card-foreground shadow-premium', className)}
+      className={cn(
+        'surface-3d rounded-2xl border bg-card text-card-foreground transition-[transform,box-shadow] duration-300',
+        className,
+      )}
       {...props}
     />
   );

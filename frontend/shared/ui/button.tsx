@@ -10,8 +10,8 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          'bg-primary text-primary-foreground shadow-sm shadow-primary/20 hover:bg-primary/90 hover:shadow-md hover:shadow-primary/25',
-        gold: 'bg-gold-gradient font-semibold text-gold-foreground shadow-sm shadow-gold/30 hover:brightness-105 hover:shadow-md hover:shadow-gold/40',
+          'qp-shine bg-primary text-primary-foreground shadow-sm shadow-primary/20 hover:bg-primary/90 hover:shadow-md hover:shadow-primary/25',
+        gold: 'qp-shine bg-gold-gradient font-semibold text-gold-foreground shadow-sm shadow-gold/30 hover:brightness-105 hover:shadow-lg hover:shadow-gold/40 hover:-translate-y-px',
         destructive: 'bg-destructive text-white hover:bg-destructive/90',
         outline:
           'border border-input bg-card shadow-xs hover:border-primary/30 hover:bg-accent hover:text-accent-foreground',

@@ -110,7 +110,7 @@ export class OwnerBookingsService {
     const since = new Date(start.getTime() - 29 * 86_400_000);
     const locations = await this.prisma.parkingLocation.findMany({
       where: { ownerId: owner.id },
-      select: { id: true, name: true, status: true, capacities: { select: { totalSlots: true } }, _count: { select: { sessions: { where: { exitAt: null } } } } },
+      select: { id: true, name: true, status: true, capacities: { select: { totalSlots: true } }, photos: { select: { url: true }, orderBy: { sortOrder: 'asc' }, take: 1 }, _count: { select: { sessions: { where: { exitAt: null } } } } },
       orderBy: { createdAt: 'asc' },
     });
     const [todayBookings, today, month, daily] = await Promise.all([
@@ -121,7 +121,7 @@ export class OwnerBookingsService {
     ]);
     const byDay = new Map(daily.map((d) => [d.key, d]));
     return {
-      locations: locations.map((l) => ({ id: l.id, name: l.name, status: l.status, inside: l._count.sessions, capacity: l.capacities.reduce((s, c) => s + c.totalSlots, 0) })),
+      locations: locations.map((l) => ({ id: l.id, name: l.name, status: l.status, inside: l._count.sessions, capacity: l.capacities.reduce((s, c) => s + c.totalSlots, 0), photoUrl: l.photos[0]?.url ?? null })),
       todayBookings,
       insideNow: locations.reduce((s, l) => s + l._count.sessions, 0),
       revenueTodayPaise: today.grossPaise - today.refundPaise,

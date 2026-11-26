@@ -26,18 +26,34 @@ export interface ResolvedPlace {
 // ---------- OpenStreetMap fallback (Photon by komoot: free, no key) ----------
 interface PhotonFeature {
   geometry: { coordinates: [number, number] };
-  properties: { osm_id: number; name?: string; street?: string; housenumber?: string; district?: string; locality?: string; city?: string; county?: string; state?: string; postcode?: string };
+  properties: {
+    osm_id: number;
+    name?: string;
+    street?: string;
+    housenumber?: string;
+    district?: string;
+    locality?: string;
+    city?: string;
+    county?: string;
+    state?: string;
+    postcode?: string;
+  };
 }
 const INDIA_BBOX = '68.1,6.5,97.4,35.7';
 
 async function photonSuggest(input: string): Promise<PlaceSuggestion[]> {
-  const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(input)}&limit=5&lang=en&bbox=${INDIA_BBOX}`);
+  const res = await fetch(
+    `https://photon.komoot.io/api/?q=${encodeURIComponent(input)}&limit=5&lang=en&bbox=${INDIA_BBOX}`,
+  );
   if (!res.ok) return [];
   const data = (await res.json()) as { features: PhotonFeature[] };
   return data.features.map((f, i) => {
     const p = f.properties;
-    const title = p.name ?? ([p.housenumber, p.street].filter(Boolean).join(' ') || p.city || input);
-    const subtitle = [p.locality ?? p.district, p.city ?? p.county, p.state].filter((x) => x && x !== title).join(', ');
+    const title =
+      p.name ?? ([p.housenumber, p.street].filter(Boolean).join(' ') || p.city || input);
+    const subtitle = [p.locality ?? p.district, p.city ?? p.county, p.state]
+      .filter((x) => x && x !== title)
+      .join(', ');
     return { id: `osm-${p.osm_id}-${i}`, title, subtitle, ref: f };
   });
 }
@@ -49,7 +65,9 @@ function photonResolve(s: PlaceSuggestion): ResolvedPlace {
     lng: f.geometry.coordinates[0],
     lat: f.geometry.coordinates[1],
     label: s.title,
-    address: [p.name, [p.housenumber, p.street].filter(Boolean).join(' '), p.locality ?? p.district].filter(Boolean).join(', '),
+    address: [p.name, [p.housenumber, p.street].filter(Boolean).join(' '), p.locality ?? p.district]
+      .filter(Boolean)
+      .join(', '),
     city: p.city ?? p.county ?? '',
     state: p.state ?? '',
     pincode: p.postcode ?? '',
@@ -85,7 +103,12 @@ export function usePlaceSearch() {
         .slice(0, 5)
         .map((s) => {
           const p = s.placePrediction!;
-          return { id: p.placeId, title: p.mainText?.text ?? p.text.text, subtitle: p.secondaryText?.text ?? '', ref: p };
+          return {
+            id: p.placeId,
+            title: p.mainText?.text ?? p.text.text,
+            subtitle: p.secondaryText?.text ?? '',
+            ref: p,
+          };
         });
     },
     [places],
@@ -94,14 +117,19 @@ export function usePlaceSearch() {
   const resolve = useCallback(async (s: PlaceSuggestion): Promise<ResolvedPlace> => {
     if (!GOOGLE_MAPS_KEY) return photonResolve(s);
     const place = (s.ref as google.maps.places.PlacePrediction).toPlace();
-    await place.fetchFields({ fields: ['location', 'displayName', 'formattedAddress', 'addressComponents'] });
+    await place.fetchFields({
+      fields: ['location', 'displayName', 'formattedAddress', 'addressComponents'],
+    });
     token.current = null; // the session ends with fetchFields
     return {
       lat: place.location!.lat(),
       lng: place.location!.lng(),
       label: place.displayName ?? s.title,
       address: place.formattedAddress ?? s.title,
-      city: component(place, 'locality') || component(place, 'administrative_area_level_3') || component(place, 'administrative_area_level_2'),
+      city:
+        component(place, 'locality') ||
+        component(place, 'administrative_area_level_3') ||
+        component(place, 'administrative_area_level_2'),
       state: component(place, 'administrative_area_level_1'),
       pincode: component(place, 'postal_code'),
     };

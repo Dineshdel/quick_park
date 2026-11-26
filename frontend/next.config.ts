@@ -1,6 +1,7 @@
 import { loadEnvConfig } from '@next/env';
 import type { NextConfig } from 'next';
 import path from 'node:path';
+import { securityHeaders } from './security-headers';
 
 // One .env at the repo root serves both apps. Next has already loaded (and cached) env files from frontend/
 // before this runs, so force a reload from the root, otherwise NEXT_PUBLIC_* values never reach the browser.
@@ -10,6 +11,8 @@ const apiUrl = process.env.API_INTERNAL_URL ?? 'http://localhost:4000';
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // Don't advertise the framework in an X-Powered-By header.
+  poweredByHeader: false,
   // The pnpm monorepo root (stops Next guessing it from unrelated lockfiles higher up the disk).
   outputFileTracingRoot: path.resolve(__dirname, '..'),
   // Lets a production build run next to `next dev` without clobbering its .next folder (NEXT_DIST_DIR=.next-build).
@@ -26,11 +29,7 @@ const nextConfig: NextConfig = {
     return [
       {
         source: '/:path*',
-        headers: [
-          { key: 'X-Content-Type-Options', value: 'nosniff' },
-          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-          { key: 'X-Frame-Options', value: 'DENY' },
-        ],
+        headers: securityHeaders,
       },
     ];
   },

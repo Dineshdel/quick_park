@@ -12,3 +12,7 @@ onlyBuiltDependencies:
   - prisma
   - sharp
   - unrs-resolver
+# Security: newer patched builds of packages Next.js pins internally (pnpm audit).
+overrides:
+  postcss@<8.5.18: 8.5.33
+  sharp@<0.35.5: 0.35.5

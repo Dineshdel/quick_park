@@ -38,6 +38,13 @@ export class AccessController {
     return this.access.exit(u.id, id, body.paymentMethod);
   }
 
+  /** Send the overstay charge to the driver's app to pay online. */
+  @HttpCode(HttpStatus.OK)
+  @Post('sessions/:id/request-online')
+  requestOnline(@CurrentUser() u: AuthUser, @Param('id', new ParseUUIDPipe()) id: string) {
+    return this.access.requestOnline(u.id, id);
+  }
+
   @Get('sessions')
   sessions(@CurrentUser() u: AuthUser, @Query('locationId', new ParseUUIDPipe()) locationId: string, @Query('open') open?: string) {
     return this.access.sessions(u.id, locationId, open !== 'false');

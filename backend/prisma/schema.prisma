@@ -60,6 +60,7 @@ model User {
   vehicles      Vehicle[]
   owner         Owner?
   bookings      Booking[]
+  notifications Notification[]
 
   @@map("users")
 }
@@ -593,6 +594,7 @@ model ParkingSession {
   booking     Booking?        @relation(fields: [bookingId], references: [id], onDelete: SetNull)
   vehicle     Vehicle?        @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
   vehicleType VehicleType     @relation(fields: [vehicleTypeId], references: [id], onDelete: Restrict)
+  payments    Payment[]
 
   @@index([locationId, exitAt])
   @@index([bookingId])
@@ -610,6 +612,8 @@ enum PaymentStatus {
 enum PaymentPurpose {
   BOOKING
   EXTENSION
+  /// Overstay charge the driver pays online from their notifications (sessionId is set).
+  GATE_CHARGE
 }
 
 model Payment {
@@ -624,11 +628,15 @@ model Payment {
   status            PaymentStatus  @default(CREATED)
   paidAt            DateTime?      @map("paid_at") @db.Timestamptz(3)
   createdAt         DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  /// GATE_CHARGE only: the parking session this overstay charge closes when paid.
+  sessionId         String?        @map("session_id") @db.Uuid
 
-  booking Booking  @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  booking Booking         @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  session ParkingSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
   refunds Refund[]
 
   @@index([bookingId])
+  @@index([sessionId])
   @@map("payments")
 }
 
@@ -737,4 +745,26 @@ model AuditLog {
   @@index([entity, entityId])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+/// In-app notifications (the bell menu). Emails are sent separately by NotificationsService.
+model Notification {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  /// e.g. GATE_CHARGE_DUE, GATE_CHARGE_PAID
+  type        String
+  title       String
+  body        String
+  /// Web path to open, e.g. /vehicle-owner/pay/<paymentId>
+  link        String?
+  /// GATE_CHARGE_*: the payment this is about (the app opens its pay screen).
+  paymentId   String?   @map("payment_id") @db.Uuid
+  amountPaise Int?      @map("amount_paise")
+  readAt      DateTime? @map("read_at") @db.Timestamptz(3)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("notifications")
 }

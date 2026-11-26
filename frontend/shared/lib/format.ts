@@ -6,8 +6,10 @@ const TZ = 'Asia/Kolkata';
 
 export const fmtDateTime = (iso: string | Date) =>
   new Date(iso).toLocaleString('en-IN', { timeZone: TZ, dateStyle: 'medium', timeStyle: 'short' });
-export const fmtDate = (iso: string | Date) => new Date(iso).toLocaleDateString('en-IN', { timeZone: TZ, dateStyle: 'medium' });
-export const fmtTime = (iso: string | Date) => new Date(iso).toLocaleTimeString('en-IN', { timeZone: TZ, timeStyle: 'short' });
+export const fmtDate = (iso: string | Date) =>
+  new Date(iso).toLocaleDateString('en-IN', { timeZone: TZ, dateStyle: 'medium' });
+export const fmtTime = (iso: string | Date) =>
+  new Date(iso).toLocaleTimeString('en-IN', { timeZone: TZ, timeStyle: 'short' });
 
 export const planLabel = (p: PlanType, qty = 1) =>
   p === 'EVENT' ? 'Event pass' : `${qty} ${PLAN_RULES[p].unit}${qty === 1 ? '' : 's'}`;

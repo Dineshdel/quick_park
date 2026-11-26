@@ -1,6 +1,6 @@
 import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { type PaymentOrderDto } from '@qp/types';
+import { type GateChargeDto, type PaymentOrderDto } from '@qp/types';
 import { AuditService } from '../audit/audit.service';
 import { AvailabilityService } from '../availability/availability.service';
 import { PrismaService } from '../database/prisma.service';
@@ -11,6 +11,12 @@ import { PAYMENT_PROVIDER, type PaidEvent, type PaymentProvider } from './paymen
 
 export const REFUND_MAX_ATTEMPTS = 6;
 
+/** Booking money only: online gate charges (overstay) are counted with the gate takings instead. */
+const BOOKING_MONEY = { purpose: { not: 'GATE_CHARGE' as const } };
+
+/** Called once an online gate charge is paid; the gate module registers it (it closes the session). */
+export type GateChargePaidHandler = (paymentId: string) => Promise<void>;
+
 /**
  * Orders, webhook handling and refunds. A booking becomes CONFIRMED only from a verified payment event,
  * and every event is processed at most once (webhook_events unique (provider, event_id)).
@@ -18,6 +24,7 @@ export const REFUND_MAX_ATTEMPTS = 6;
 @Injectable()
 export class PaymentsService {
   private readonly logger = new Logger(PaymentsService.name);
+  private gateChargePaid: GateChargePaidHandler | null = null;
   constructor(
     private readonly prisma: PrismaService,
     @Inject(PAYMENT_PROVIDER) readonly provider: PaymentProvider,
@@ -40,7 +47,7 @@ export class PaymentsService {
     }
     const purpose = b.extendedFromId ? 'EXTENSION' : 'BOOKING';
     let payment = await this.prisma.payment.findFirst({
-      where: { bookingId, status: 'CREATED', provider: this.provider.name },
+      where: { bookingId, status: 'CREATED', provider: this.provider.name, ...BOOKING_MONEY },
     });
     if (!payment) {
       const order = await this.provider.createOrder(b.amountPaise, b.code);
@@ -61,6 +68,85 @@ export class PaymentsService {
       currency: 'INR',
       keyId: this.provider.keyId,
       bookingId,
+    };
+  }
+
+  onGateChargePaid(handler: GateChargePaidHandler) {
+    this.gateChargePaid = handler;
+  }
+
+  /**
+   * Overstay charge to be paid online by the driver: a gateway order tied to the booking and session.
+   * Any earlier unpaid request for the same session is cancelled (the amount grows with time).
+   */
+  async createGateCharge(bookingId: string, sessionId: string, amountPaise: number, code: string) {
+    await this.cancelGateCharges(sessionId);
+    const order = await this.provider.createOrder(amountPaise, code);
+    return this.prisma.payment.create({
+      data: {
+        bookingId,
+        sessionId,
+        purpose: 'GATE_CHARGE',
+        provider: this.provider.name,
+        providerOrderId: order.orderId,
+        amountPaise,
+      },
+    });
+  }
+
+  /** Cancels unpaid online gate charges for a session (paid in cash instead, or replaced). */
+  async cancelGateCharges(sessionId: string) {
+    const open = await this.prisma.payment.findMany({
+      where: { sessionId, purpose: 'GATE_CHARGE', status: 'CREATED' },
+      select: { id: true },
+    });
+    if (!open.length) return;
+    await this.prisma.payment.updateMany({
+      where: { id: { in: open.map((p) => p.id) }, status: 'CREATED' },
+      data: { status: 'FAILED' },
+    });
+    for (const p of open) await this.notify.markPaymentRead(p.id);
+  }
+
+  /** The driver's view of an online gate charge (with checkout details while unpaid). */
+  async gateCharge(userId: string, paymentId: string): Promise<GateChargeDto> {
+    const p = await this.prisma.payment.findUnique({
+      where: { id: paymentId },
+      include: {
+        booking: { select: { userId: true, code: true } },
+        session: {
+          select: {
+            plateNumber: true,
+            overstayMinutes: true,
+            location: { select: { name: true } },
+          },
+        },
+      },
+    });
+    if (!p || p.purpose !== 'GATE_CHARGE' || p.booking.userId !== userId || !p.session)
+      throw Errors.notFound('Payment');
+    const status = p.status === 'PAID' ? 'PAID' : p.status === 'CREATED' ? 'PENDING' : 'CANCELLED';
+    return {
+      paymentId: p.id,
+      status,
+      amountPaise: p.amountPaise,
+      plateNumber: p.session.plateNumber,
+      placeName: p.session.location.name,
+      bookingCode: p.booking.code,
+      overstayMinutes: p.session.overstayMinutes,
+      requestedAt: p.createdAt.toISOString(),
+      paidAt: p.paidAt?.toISOString() ?? null,
+      order:
+        status === 'PENDING'
+          ? {
+              provider: this.provider.name,
+              orderId: p.providerOrderId,
+              amountPaise: p.amountPaise,
+              currency: 'INR',
+              keyId: this.provider.keyId,
+              bookingId: p.bookingId,
+            }
+          : null,
     };
   }
 
@@ -94,6 +180,7 @@ export class PaymentsService {
   /** Idempotent: a replayed event id is a no-op. */
   async process(event: PaidEvent, payload: Prisma.InputJsonValue) {
     let confirmedBookingId: string | null = null;
+    let gateChargePaidId: string | null = null;
     let autoRefund: { paymentId: string; amount: number; reason?: string } | null = null;
     const touched = await this.prisma.$transaction(async (tx) => {
       try {
@@ -139,7 +226,7 @@ export class PaymentsService {
             amountPaise: event.amountPaise,
           },
         });
-        if (payment.booking.status === 'PENDING_PAYMENT') {
+        if (payment.purpose !== 'GATE_CHARGE' && payment.booking.status === 'PENDING_PAYMENT') {
           await tx.booking.update({
             where: { id: payment.bookingId },
             data: { status: 'EXPIRED' },
@@ -157,6 +244,11 @@ export class PaymentsService {
         where: { id: payment.id },
         data: { status: 'PAID', providerPaymentId: event.paymentId, paidAt: new Date() },
       });
+      if (payment.purpose === 'GATE_CHARGE') {
+        // The gate closes the session (or refunds it if the vehicle already left after paying cash).
+        gateChargePaidId = payment.id;
+        return payment.booking;
+      }
       const b = payment.booking;
       if (b.status === 'PENDING_PAYMENT') {
         // If the hold lapsed, the slot may have been sold since: re-check under the capacity lock.
@@ -205,6 +297,14 @@ export class PaymentsService {
       }
       return b;
     });
+    if (gateChargePaidId) {
+      // Never fail the webhook here: the event is already recorded, so a retry would be ignored.
+      if (!this.gateChargePaid) this.logger.error(`no handler for paid gate charge ${gateChargePaidId}`);
+      else
+        await this.gateChargePaid(gateChargePaidId).catch((e: unknown) =>
+          this.logger.error(`closing session for gate charge ${gateChargePaidId} failed: ${(e as Error).message}`),
+        );
+    }
     if (confirmedBookingId && touched) {
       await this.notify.bookingConfirmed(confirmedBookingId);
       await this.realtime.publish(touched.locationId, touched.vehicleTypeId);
@@ -337,7 +437,7 @@ export class PaymentsService {
     actorId: string | null,
   ) {
     const payments = await this.prisma.payment.findMany({
-      where: { bookingId, status: 'PAID' },
+      where: { bookingId, status: 'PAID', ...BOOKING_MONEY },
       orderBy: { paidAt: 'desc' },
       include: { refunds: true },
     });
@@ -360,11 +460,11 @@ export class PaymentsService {
   async paidAndRefunded(bookingId: string) {
     const [paid, refunded] = await Promise.all([
       this.prisma.payment.aggregate({
-        where: { bookingId, status: 'PAID' },
+        where: { bookingId, status: 'PAID', ...BOOKING_MONEY },
         _sum: { amountPaise: true },
       }),
       this.prisma.refund.aggregate({
-        where: { bookingId, status: 'PROCESSED' },
+        where: { bookingId, status: 'PROCESSED', payment: BOOKING_MONEY },
         _sum: { amountPaise: true },
       }),
     ]);

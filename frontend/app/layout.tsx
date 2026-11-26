@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Inter, Lora, Noto_Sans_Devanagari, Noto_Sans_Tamil } from 'next/font/google';
+import { Noto_Sans_Devanagari, Noto_Sans_Tamil, Overpass } from 'next/font/google';
 import { cookies } from 'next/headers';
 import type { ReactNode } from 'react';
 import { I18nProvider } from '@/shared/i18n/i18n';
@@ -11,14 +11,9 @@ import { ThemeProvider } from '@/shared/theme/theme';
 import { isThemeChoice, THEME_BOOT_SCRIPT, THEME_COOKIE } from '@/shared/theme/theme-config';
 import './globals.css';
 
-const body = Inter({ subsets: ['latin'], variable: '--font-body', display: 'swap' });
-const heading = Lora({
-  subsets: ['latin'],
-  variable: '--font-heading',
-  weight: ['500', '600', '700'],
-  display: 'swap',
-});
-// Tamil and Hindi scripts (Inter/Lora have no glyphs for them); only downloaded when those characters appear.
+// One family for everything: Overpass descends from Highway Gothic, the lettering of road and car-park signs.
+const body = Overpass({ subsets: ['latin'], variable: '--font-body', display: 'swap' });
+// Tamil and Hindi scripts (Overpass has no glyphs for them); only downloaded when those characters appear.
 const tamil = Noto_Sans_Tamil({
   subsets: ['tamil'],
   variable: '--font-tamil',
@@ -50,12 +45,12 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   const lang = jar.get(LOCALE_COOKIE)?.value;
   const locale = isLocale(lang) ? lang : DEFAULT_LOCALE;
   const themeCookie = jar.get(THEME_COOKIE)?.value;
-  const theme = isThemeChoice(themeCookie) ? themeCookie : 'system';
+  const theme = isThemeChoice(themeCookie) ? themeCookie : 'light';
 
   return (
     <html
       lang={locale}
-      className={`${body.variable} ${heading.variable} ${tamil.variable} ${devanagari.variable}${theme === 'dark' ? ' dark' : ''}`}
+      className={`${body.variable} ${tamil.variable} ${devanagari.variable}${theme === 'dark' ? ' dark' : ''}`}
       style={theme === 'system' ? undefined : { colorScheme: theme }}
       suppressHydrationWarning
     >
@@ -63,6 +58,8 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
       </head>
       <body className="flex min-h-screen flex-col">
+        {/* Fixed ambient backdrop (colour mesh, faint grid, grain) behind every page. */}
+        <div className="qp-ambient print:hidden" aria-hidden />
         <ThemeProvider initialChoice={theme}>
           <I18nProvider initialLocale={locale}>
             <Providers>

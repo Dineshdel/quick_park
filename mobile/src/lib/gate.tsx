@@ -1,6 +1,16 @@
 import type { OwnerLocationDto, ScanResultDto, SessionDto } from '@qp/types';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
+import { formatPlate } from '@qp/validation';
+import { formatRupees } from './format';
 import { api, ApiError, errorMessage } from './api';
 import { useOwnerLocations } from './hooks';
 
@@ -26,6 +36,8 @@ interface Gate {
   busy: boolean;
   scan: (token: string, direction: Direction) => Promise<void>;
   collect: (sessionId: string, method: 'CASH' | 'UPI') => Promise<void>;
+  /** Send the amount to the driver's app; the vehicle is checked out when they pay. */
+  sendOnline: (sessionId: string) => Promise<void>;
   walkIn: (plateNumber: string, vehicleTypeId: string) => Promise<void>;
 }
 
@@ -97,6 +109,48 @@ export function GateProvider({ children }: { children: ReactNode }) {
     [refreshSessions],
   );
 
+  const sendOnline = useCallback(
+    async (sessionId: string) => {
+      setBusy(true);
+      try {
+        const r = await api<ScanResultDto>(`/access/sessions/${sessionId}/request-online`, {
+          body: {},
+        });
+        setOutcome({ kind: r.amountDuePaise > 0 ? 'due' : 'ok', result: r });
+        void refreshSessions();
+      } catch (e) {
+        setOutcome({ kind: 'error', message: errorMessage(e) });
+      } finally {
+        setBusy(false);
+      }
+    },
+    [refreshSessions],
+  );
+
+  // Waiting for an online payment: poll, and once the vehicle is no longer inside the driver has paid.
+  const waitingId =
+    outcome?.kind === 'due' && outcome.result.onlineRequest ? outcome.result.sessionId : null;
+  // Derived (not stored): the vehicle left "Inside now" while we waited, so it was paid online.
+  const paidOnline =
+    !!waitingId && !!sessions.data && !sessions.data.some((x) => x.id === waitingId && !x.exitAt);
+  const shownOutcome: Outcome | null =
+    paidOnline && outcome?.kind === 'due' && outcome.result.onlineRequest
+      ? {
+          kind: 'ok',
+          result: {
+            ...outcome.result,
+            amountDuePaise: 0,
+            message: `${formatPlate(outcome.result.plateNumber)} may leave (paid ${formatRupees(outcome.result.onlineRequest.amountPaise)} online)`,
+          },
+        }
+      : outcome;
+
+  useEffect(() => {
+    if (!waitingId || paidOnline) return;
+    const t = setInterval(() => void refreshSessions(), 4000);
+    return () => clearInterval(t);
+  }, [waitingId, paidOnline, refreshSessions]);
+
   const walkIn = useCallback(
     async (plateNumber: string, vehicleTypeId: string) => {
       setBusy(true);
@@ -126,11 +180,12 @@ export function GateProvider({ children }: { children: ReactNode }) {
     sessions: sessions.data ?? [],
     sessionsLoading: sessions.isPending && !!placeId,
     refreshSessions: () => sessions.refetch(),
-    outcome,
+    outcome: shownOutcome,
     clearOutcome: () => setOutcome(null),
     busy,
     scan,
     collect,
+    sendOnline,
     walkIn,
   };
   return <GateContext.Provider value={value}>{children}</GateContext.Provider>;

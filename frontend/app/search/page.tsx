@@ -2,13 +2,14 @@
 
 import type { Paginated, SearchResultDto } from '@qp/types';
 import { useQuery } from '@tanstack/react-query';
-import { MapPin, Navigation } from 'lucide-react';
+import { Navigation } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '@/shared/lib/api';
 import { useSession } from '@/shared/lib/auth/use-session';
 import { formatRupees, planUnit } from '@/shared/lib/format';
+import { placeholderPhoto } from '@/shared/lib/placeholder-photo';
 import { useVehicleTypes } from '@/shared/data/masters';
 import { Map } from '@/shared/maps/map';
 import { usePlaceSearch } from '@/shared/maps/places';
@@ -132,15 +133,14 @@ function Results() {
               <CardContent className="flex gap-4 p-3">
                 <Link
                   href={`/p/${p.slug}${vt ? `?vehicleType=${vt}` : ''}`}
-                  className="size-24 shrink-0 overflow-hidden rounded-md bg-muted"
+                  className="size-24 shrink-0 overflow-hidden rounded-2xl bg-muted"
                 >
-                  {p.photoUrl ? (
-                    <img src={p.photoUrl} alt="" className="size-full object-cover" />
-                  ) : (
-                    <div className="flex size-full items-center justify-center text-muted-foreground">
-                      <MapPin />
-                    </div>
-                  )}
+                  <img
+                    src={p.photoUrl ?? placeholderPhoto(p.id, 300)}
+                    alt=""
+                    loading="lazy"
+                    className="size-full object-cover"
+                  />
                 </Link>
                 <div className="grid min-w-0 flex-1 content-start gap-1">
                   <div className="flex flex-wrap items-center gap-2">
@@ -202,7 +202,7 @@ function Results() {
             </Card>
           ))}
         </div>
-        <div className="lg:sticky lg:top-4 lg:self-start">
+        <div className="lg:sticky lg:top-32 lg:self-start">
           <Map className="h-[460px]" points={points} origin={origin} activeId={hover} />
         </div>
       </div>

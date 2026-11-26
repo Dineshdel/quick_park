@@ -3,7 +3,7 @@
 import type { ChargeBreakdownDto, ScanResultDto, SessionDto } from '@qp/types';
 import { formatPlate } from '@qp/validation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Camera, CameraOff, LogIn, LogOut } from 'lucide-react';
+import { Camera, CameraOff, LogIn, LogOut, Smartphone } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PageShell } from '@/shared/layout/page-shell';
 import { api, ApiError, errorMessage } from '@/shared/lib/api';
@@ -17,7 +17,7 @@ import { Input } from '@/shared/ui/input';
 import { Select } from '@/shared/ui/select';
 import { Tabs } from '@/shared/ui/tabs';
 import { useOwnerLocations } from '../_components/use-owner';
-import { ErrorPopup } from '@/shared/ui/confirm-dialog';
+import { ErrorPopup, useConfirm } from '@/shared/ui/confirm-dialog';
 
 type Direction = 'ENTRY' | 'EXIT';
 
@@ -151,6 +151,7 @@ function CameraScanner({ onCode }: { onCode: (code: string) => void }) {
 
 export default function ScannerPage() {
   const qc = useQueryClient();
+  const ask = useConfirm();
   const locs = useOwnerLocations();
   const active = useMemo(() => locs.data?.filter((l) => l.status === 'ACTIVE') ?? [], [locs.data]);
   const [locationId, setLocationId] = useState('');
@@ -229,6 +230,59 @@ export default function ScannerPage() {
       setBusy(false);
     }
   };
+
+  /** Send the amount to the driver's app; the vehicle is checked out when they pay. */
+  const sendOnline = async (r: ScanResultDto) => {
+    if (
+      !(await ask({
+        title: `Send ${formatRupees(r.amountDuePaise)} to ${r.customerName ?? 'the driver'}?`,
+        description:
+          'They get a notification in Quick Park to pay online. The vehicle is checked out automatically once paid.',
+        confirmLabel: 'Send to driver',
+      }))
+    )
+      return;
+    setBusy(true);
+    try {
+      const res = await api<ScanResultDto>(`/access/sessions/${r.sessionId}/request-online`, {
+        body: {},
+      });
+      setOutcome(
+        res.amountDuePaise > 0 ? { kind: 'due', result: res } : { kind: 'ok', result: res },
+      );
+      refresh();
+    } catch (e) {
+      setOutcome({ kind: 'error', message: errorMessage(e) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Waiting for an online payment: once the session leaves "Inside now", the driver has paid.
+  const waitingId =
+    outcome?.kind === 'due' && outcome.result.onlineRequest ? outcome.result.sessionId : null;
+  useEffect(() => {
+    if (!waitingId) return;
+    const t = setInterval(refresh, 4000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [waitingId]);
+  useEffect(() => {
+    if (!waitingId || !sessions.data) return;
+    if (sessions.data.some((x) => x.id === waitingId && !x.exitAt)) return;
+    setOutcome((o) =>
+      o?.kind === 'due' && o.result.sessionId === waitingId
+        ? {
+            kind: 'ok',
+            result: {
+              ...o.result,
+              amountDuePaise: 0,
+              message: `${formatPlate(o.result.plateNumber)} may leave (paid ${formatRupees(o.result.onlineRequest!.amountPaise)} online)`,
+            },
+          }
+        : o,
+    );
+  }, [waitingId, sessions.data]);
 
   const walkIn = async () => {
     setBusy(true);
@@ -385,27 +439,68 @@ export default function ScannerPage() {
                         : ''}
                     </p>
                     {outcome.result.charges && <ChargeBreakdown c={outcome.result.charges} />}
-                    {outcome.kind === 'due' && (
+                    {outcome.kind === 'due' && outcome.result.onlineRequest ? (
                       <div className="grid gap-2">
-                        <p className="text-2xl font-semibold">
-                          Collect {formatRupees(outcome.result.amountDuePaise)}
-                        </p>
-                        <div className="flex gap-2">
-                          <Button
-                            loading={busy}
-                            onClick={() => collect(outcome.result.sessionId, 'CASH')}
-                          >
-                            Paid in cash
-                          </Button>
+                        <Alert>
+                          <span className="flex items-center gap-2">
+                            <Smartphone className="size-4 animate-pulse" aria-hidden />
+                            Waiting for the driver to pay{' '}
+                            <b>{formatRupees(outcome.result.onlineRequest.amountPaise)}</b> online
+                            (sent {fmtTime(outcome.result.onlineRequest.requestedAt)}). This updates
+                            by itself.
+                          </span>
+                        </Alert>
+                        <div className="flex flex-wrap gap-2">
                           <Button
                             variant="outline"
                             disabled={busy}
-                            onClick={() => collect(outcome.result.sessionId, 'UPI')}
+                            onClick={() => collect(outcome.result.sessionId, 'CASH')}
                           >
-                            Paid by UPI
+                            Took cash instead ({formatRupees(outcome.result.amountDuePaise)})
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            disabled={busy}
+                            onClick={() => sendOnline(outcome.result)}
+                          >
+                            Send again
                           </Button>
                         </div>
                       </div>
+                    ) : (
+                      outcome.kind === 'due' && (
+                        <div className="grid gap-2">
+                          <p className="text-2xl font-semibold">
+                            Collect {formatRupees(outcome.result.amountDuePaise)}
+                          </p>
+                          <p className="text-sm text-muted-foreground">How will they pay?</p>
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              loading={busy}
+                              onClick={() => collect(outcome.result.sessionId, 'CASH')}
+                            >
+                              Cash (check out now)
+                            </Button>
+                            {outcome.result.canPayOnline ? (
+                              <Button
+                                variant="outline"
+                                disabled={busy}
+                                onClick={() => sendOnline(outcome.result)}
+                              >
+                                <Smartphone /> Online (send to driver)
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="outline"
+                                disabled={busy}
+                                onClick={() => collect(outcome.result.sessionId, 'UPI')}
+                              >
+                                Paid by UPI
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      )
                     )}
                   </>
                 )}
@@ -447,6 +542,11 @@ export default function ScannerPage() {
                     ) : (
                       late && <Badge variant="danger">Overstaying</Badge>
                     )}
+                    {s.onlineRequestPaise ? (
+                      <Badge variant="info">
+                        Online {formatRupees(s.onlineRequestPaise)} requested
+                      </Badge>
+                    ) : null}
                     {s.dueNowPaise > 0 && (
                       <span className="font-semibold text-amber-600 tabular-nums dark:text-amber-400">
                         {formatRupees(s.dueNowPaise)} due

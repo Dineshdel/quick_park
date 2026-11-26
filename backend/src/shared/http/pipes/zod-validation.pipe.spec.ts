@@ -6,8 +6,8 @@ describe('ZodValidationPipe', () => {
   const pipe = new ZodValidationPipe(registerSchema);
 
   it('returns parsed (normalised) data', () => {
-    const out = pipe.transform({ name: ' Asha ', email: ' A@B.COM ', password: '12345678', role: 'VEHICLE_OWNER' });
-    expect(out).toEqual({ name: 'Asha', email: 'a@b.com', password: '12345678', role: 'VEHICLE_OWNER' });
+    const out = pipe.transform({ name: ' Asha ', email: ' A@B.COM ', password: 'tamarind-kite-42', role: 'VEHICLE_OWNER' });
+    expect(out).toEqual({ name: 'Asha', email: 'a@b.com', password: 'tamarind-kite-42', role: 'VEHICLE_OWNER' });
   });
 
   it('throws VALIDATION_FAILED with per-field details', () => {

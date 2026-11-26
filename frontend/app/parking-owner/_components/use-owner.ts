@@ -14,4 +14,8 @@ export const useOwnerProfile = () =>
     },
   });
 
-export const useOwnerLocations = () => useQuery({ queryKey: ['owner-locations'], queryFn: () => api<OwnerLocationDto[]>('/owner/locations') });
+export const useOwnerLocations = () =>
+  useQuery({
+    queryKey: ['owner-locations'],
+    queryFn: () => api<OwnerLocationDto[]>('/owner/locations'),
+  });

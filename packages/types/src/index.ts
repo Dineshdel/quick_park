@@ -456,6 +456,10 @@ export interface ScanResultDto {
   /** How the amount was worked out (shown at check-out); null when nothing is charged. */
   charges: ChargeBreakdownDto | null;
   message: string;
+  /** The driver has an account (booked vehicle), so the amount can be sent to them to pay online. */
+  canPayOnline?: boolean;
+  /** An online payment request is waiting for the driver to pay. */
+  onlineRequest?: { paymentId: string; amountPaise: number; requestedAt: string } | null;
 }
 
 /** Gate charge, per started hour: overstay past the booking end (after the free grace) or a walk-in stay. */
@@ -493,6 +497,41 @@ export interface SessionDto {
   freeUntil: string | null;
   /** Vehicles still inside: what check-out would charge right now. */
   dueNowPaise: number;
+  /** Amount sent to the driver to pay online and not paid yet. */
+  onlineRequestPaise?: number | null;
+}
+
+/** In-app notification (bell menu). */
+export interface NotificationDto {
+  id: string;
+  type: 'GATE_CHARGE_DUE' | 'GATE_CHARGE_PAID' | string;
+  title: string;
+  body: string;
+  link: string | null;
+  paymentId: string | null;
+  amountPaise: number | null;
+  read: boolean;
+  createdAt: string;
+}
+
+export interface NotificationListDto {
+  items: NotificationDto[];
+  unread: number;
+}
+
+/** An overstay charge the gate sent to the driver to pay online. */
+export interface GateChargeDto {
+  paymentId: string;
+  status: 'PENDING' | 'PAID' | 'CANCELLED';
+  amountPaise: number;
+  plateNumber: string;
+  placeName: string;
+  bookingCode: string;
+  overstayMinutes: number;
+  requestedAt: string;
+  paidAt: string | null;
+  /** Present while PENDING: what the checkout needs. */
+  order: PaymentOrderDto | null;
 }
 
 export interface AvailabilityEvent {
@@ -526,6 +565,8 @@ export interface OwnerDashboardDto {
     status: LocationStatus;
     inside: number;
     capacity: number;
+    /** The owner's first photo of the place (by sort order), or null when none has been uploaded. */
+    photoUrl: string | null;
   }[];
   todayBookings: number;
   insideNow: number;

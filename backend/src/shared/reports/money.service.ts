@@ -55,9 +55,10 @@ export class MoneyService {
     if (f.locationId) where.push(Prisma.sql`l.id = ${f.locationId}::uuid`);
     const rows = await this.prisma.$queryRaw<{ key: string; label: string; bookings: bigint; gross: bigint; refunds: bigint; commission: Prisma.Decimal | null }[]>`
       WITH p AS (
-        SELECT booking_id, SUM(amount_paise) AS amount, MIN(paid_at) AS paid_at FROM payments WHERE status = 'PAID' GROUP BY booking_id
+        SELECT booking_id, SUM(amount_paise) AS amount, MIN(paid_at) AS paid_at FROM payments WHERE status = 'PAID' AND purpose <> 'GATE_CHARGE' GROUP BY booking_id
       ), r AS (
-        SELECT booking_id, SUM(amount_paise) AS refunded FROM refunds WHERE status = 'PROCESSED' GROUP BY booking_id
+        SELECT rf.booking_id, SUM(rf.amount_paise) AS refunded FROM refunds rf JOIN payments pp ON pp.id = rf.payment_id
+        WHERE rf.status = 'PROCESSED' AND pp.purpose <> 'GATE_CHARGE' GROUP BY rf.booking_id
       )
       SELECT ${key} AS key, ${label} AS label, COUNT(*) AS bookings,
         COALESCE(SUM(p.amount), 0) AS gross,
@@ -93,7 +94,7 @@ export class MoneyService {
     );
   }
 
-  /** Cash/UPI collected at the gate (walk-ins + overstay) for an owner's places. */
+  /** Collected at the gate (walk-ins + overstay: cash, UPI, or paid online by the driver) for an owner's places. */
   async gate(f: MoneyFilter) {
     const where: Prisma.ParkingSessionWhereInput = {
       exitAt: { not: null, ...(f.from ? { gte: f.from } : {}), ...(f.to ? { lt: f.to } : {}) },

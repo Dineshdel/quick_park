@@ -3,7 +3,7 @@
 import type { BookingDto, PassDto } from '@qp/types';
 import { formatPlate, refundPctFor } from '@qp/validation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Download, RotateCcw } from 'lucide-react';
+import { Download, RotateCcw } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -94,11 +94,6 @@ export default function BookingDetailPage() {
 
   return (
     <div className="mx-auto grid max-w-4xl gap-6 px-4 py-8">
-      <Button variant="ghost" size="sm" asChild className="justify-self-start">
-        <Link href="/vehicle-owner/bookings">
-          <ArrowLeft /> My bookings
-        </Link>
-      </Button>
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-2xl font-semibold tracking-tight">{b.location.name}</h1>
         <StatusPill status={b.status} label={STATUS_LABEL[b.status]} />

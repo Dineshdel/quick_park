@@ -68,7 +68,11 @@ export const session = {
 let refreshing: Promise<AuthResult | null> | null = null;
 
 async function doRefresh(): Promise<AuthResult | null> {
-  const res = await fetch(`${API_BASE}/auth/refresh`, { method: 'POST', headers: CSRF_HEADERS, credentials: 'same-origin' });
+  const res = await fetch(`${API_BASE}/auth/refresh`, {
+    method: 'POST',
+    headers: CSRF_HEADERS,
+    credentials: 'same-origin',
+  });
   return res.ok ? ((await res.json()) as AuthResult) : null;
 }
 
@@ -81,7 +85,10 @@ export function refreshSession(): Promise<AuthResult | null> {
   const run: Promise<AuthResult | null> =
     typeof navigator !== 'undefined' && navigator.locks
       ? // lib.dom types the result as Promise<Promise<T>>; at runtime the lock resolves with T.
-        (navigator.locks.request('qp-auth-refresh', doRefresh) as unknown as Promise<AuthResult | null>)
+        (navigator.locks.request(
+          'qp-auth-refresh',
+          doRefresh,
+        ) as unknown as Promise<AuthResult | null>)
       : doRefresh();
   refreshing = run
     .catch(() => null)
@@ -142,7 +149,8 @@ export async function apiBlob(path: string, retry = true): Promise<string> {
   const headers: Record<string, string> = {};
   if (current.status === 'authenticated') headers.Authorization = `Bearer ${current.accessToken}`;
   const res = await fetch(`${API_BASE}${path}`, { headers, credentials: 'same-origin' });
-  if (res.status === 401 && retry && current.status === 'authenticated' && (await refreshSession())) return apiBlob(path, false);
+  if (res.status === 401 && retry && current.status === 'authenticated' && (await refreshSession()))
+    return apiBlob(path, false);
   if (!res.ok) throw await toApiError(res);
   return URL.createObjectURL(await res.blob());
 }
@@ -152,8 +160,14 @@ export async function apiUpload<T>(path: string, form: FormData, retry = true): 
   const current = session.get();
   const headers: Record<string, string> = {};
   if (current.status === 'authenticated') headers.Authorization = `Bearer ${current.accessToken}`;
-  const res = await fetch(`${API_BASE}${path}`, { method: 'POST', headers, body: form, credentials: 'same-origin' });
-  if (res.status === 401 && retry && current.status === 'authenticated' && (await refreshSession())) return apiUpload<T>(path, form, false);
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: 'POST',
+    headers,
+    body: form,
+    credentials: 'same-origin',
+  });
+  if (res.status === 401 && retry && current.status === 'authenticated' && (await refreshSession()))
+    return apiUpload<T>(path, form, false);
   if (!res.ok) throw await toApiError(res);
   return (await res.json()) as T;
 }
@@ -169,7 +183,8 @@ export async function openBlob(path: string, download?: string) {
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
-export const errorMessage = (e: unknown) => (e instanceof ApiError ? e.message : 'Something went wrong, please try again');
+export const errorMessage = (e: unknown) =>
+  e instanceof ApiError ? e.message : 'Something went wrong, please try again';
 
 export async function logout() {
   await api('/auth/logout', { method: 'POST' }).catch(() => undefined);

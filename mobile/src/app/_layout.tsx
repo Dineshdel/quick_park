@@ -30,6 +30,7 @@ function Navigator() {
         <Stack.Screen name="book/[id]" options={{ title: 'Book a slot' }} />
         <Stack.Screen name="booking/[id]" options={{ title: 'Booking' }} />
         <Stack.Screen name="pay/[id]" options={{ title: 'Payment', presentation: 'modal' }} />
+        <Stack.Screen name="gate-charge/[id]" options={{ title: 'Overstay charge' }} />
         <Stack.Screen name="vehicle/[id]" options={{ title: 'Vehicle QR sticker' }} />
       </Stack>
     </>

@@ -1,7 +1,8 @@
-import { HttpStatus, Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import { type Booking, type ParkingSession, Prisma } from '@prisma/client';
 import {
   VEHICLE_QR_PREFIX,
+  formatRupees,
   type ChargeBreakdownDto,
   type ScanResultDto,
   type SessionDto,
@@ -14,6 +15,7 @@ import { AppException, Errors } from '../../shared/http/app-exception';
 import { MastersService } from '../../shared/masters/masters.service';
 import { NotificationsService } from '../../shared/notifications/notifications.service';
 import { PassService } from '../../shared/pass/pass.service';
+import { PaymentsService } from '../../shared/payments/payments.service';
 import { RealtimeGateway } from '../../shared/realtime/realtime.gateway';
 import { OwnerContext } from '../owner-context.service';
 
@@ -54,9 +56,12 @@ const HOUR = 60 * MIN;
  *  Q6 grace minutes come from platform settings. Q7 weekly+ passes allow unlimited re-entry until they end.
  *  Q8 a sticker scan uses the vehicle's current booking here, else suggests a walk-in.
  *  Q9 the owner scans personally (no attendant role).
+ * Overstay on a booked vehicle can also be sent to the driver to pay online (requestOnline): the session
+ * closes by itself once the payment arrives (gateChargePaid). Cash at the gate cancels the online request.
  */
 @Injectable()
-export class AccessService {
+export class AccessService implements OnModuleInit {
+  private readonly logger = new Logger(AccessService.name);
   constructor(
     private readonly prisma: PrismaService,
     private readonly ctx: OwnerContext,
@@ -65,7 +70,12 @@ export class AccessService {
     private readonly availability: AvailabilityService,
     private readonly realtime: RealtimeGateway,
     private readonly notify: NotificationsService,
+    private readonly payments: PaymentsService,
   ) {}
+
+  onModuleInit() {
+    this.payments.onGateChargePaid((paymentId) => this.gateChargePaid(paymentId));
+  }
 
   async scan(userId: string, input: z.output<typeof scanSchema>): Promise<ScanResultDto> {
     await this.ctx.location(userId, input.locationId);
@@ -285,7 +295,104 @@ export class AccessService {
         { path: 'paymentMethod', message: 'Choose cash or UPI' },
       ]);
     }
+    await this.payments.cancelGateCharges(s.id);
     return this.close(userId, s, due, due.total > 0 ? paymentMethod! : null);
+  }
+
+  /**
+   * "Online": send the overstay amount to the driver's notifications. The amount is fixed now; the vehicle is
+   * checked out automatically when the driver pays (see gateChargePaid). Asking again replaces the request.
+   */
+  async requestOnline(userId: string, sessionId: string): Promise<ScanResultDto> {
+    const s = await this.prisma.parkingSession.findUnique({ where: { id: sessionId } });
+    if (!s) throw Errors.notFound('Session');
+    await this.ctx.location(userId, s.locationId);
+    if (s.exitAt) throw fail(HttpStatus.CONFLICT, 'NOT_INSIDE', 'This vehicle has already left');
+    if (!s.bookingId)
+      throw Errors.badRequest(
+        'VALIDATION_FAILED',
+        'Walk-ins have no Quick Park account: collect cash or UPI at the gate',
+      );
+    const settings = await this.masters.settings();
+    const now = new Date();
+    const due = await this.amounts(s, now, settings.exitGraceMinutes);
+    if (due.total <= 0) return this.close(userId, s, due, null);
+    const booking = await this.prisma.booking.findUniqueOrThrow({
+      where: { id: s.bookingId },
+      include: { location: { select: { name: true } } },
+    });
+    // Freeze what is being charged so the receipt matches what the driver paid.
+    await this.prisma.parkingSession.update({
+      where: { id: s.id },
+      data: {
+        overstayMinutes: due.overstayMinutes,
+        overstayAmountPaise: due.overstay,
+        walkInAmountPaise: due.walkIn,
+      },
+    });
+    const payment = await this.payments.createGateCharge(booking.id, s.id, due.total, booking.code);
+    const late = due.overstayMinutes;
+    const lateText = `${late >= 60 ? `${Math.floor(late / 60)} h ` : ''}${late % 60} min`;
+    await this.notify.inApp(booking.userId, {
+      type: 'GATE_CHARGE_DUE',
+      title: `Pay ${formatRupees(due.total)} to check out`,
+      body: `${formatPlate(s.plateNumber)} at ${booking.location.name} stayed ${lateText} past your booking (${booking.code}). Pay the overstay charge to leave.`,
+      link: `/vehicle-owner/pay/${payment.id}`,
+      paymentId: payment.id,
+      amountPaise: due.total,
+    });
+    const result = await this.prepareExit(userId, s, now, settings.exitGraceMinutes);
+    return {
+      ...result,
+      amountDuePaise: due.total,
+      message: `Sent ${formatRupees(due.total)} to the driver's app. The vehicle is checked out once they pay.`,
+    };
+  }
+
+  /** The driver paid an online gate charge: check the vehicle out (or refund if it already left). */
+  private async gateChargePaid(paymentId: string) {
+    const p = await this.prisma.payment.findUniqueOrThrow({
+      where: { id: paymentId },
+      include: {
+        session: { include: { location: { select: { name: true, owner: { select: { userId: true } } } } } },
+        booking: { select: { userId: true } },
+      },
+    });
+    const s = p.session;
+    if (!s) return;
+    if (s.exitAt) {
+      // Paid at the gate in the meantime: give the online payment back.
+      this.logger.warn(`gate charge ${paymentId} paid after the vehicle left; refunding`);
+      await this.payments.refund(p.id, p.amountPaise, 'Already paid at the gate', null);
+      return;
+    }
+    await this.close(
+      s.location.owner.userId,
+      s,
+      {
+        overstayMinutes: s.overstayMinutes,
+        overstay: s.overstayAmountPaise,
+        walkIn: s.walkInAmountPaise,
+        total: p.amountPaise,
+        breakdown: null,
+      },
+      'RAZORPAY',
+    ).catch((e: unknown) => {
+      // Closed by the gate a moment ago: refund the duplicate.
+      if (e instanceof AppException) {
+        return this.payments.refund(p.id, p.amountPaise, 'Already paid at the gate', null);
+      }
+      throw e;
+    });
+    await this.notify.markPaymentRead(p.id);
+    await this.notify.inApp(p.booking.userId, {
+      type: 'GATE_CHARGE_PAID',
+      title: `Paid ${formatRupees(p.amountPaise)}: you may leave`,
+      body: `${formatPlate(s.plateNumber)} is checked out of ${s.location.name}. Thank you!`,
+      link: `/vehicle-owner/pay/${p.id}`,
+      paymentId: p.id,
+      amountPaise: p.amountPaise,
+    });
   }
 
   async sessions(userId: string, locationId: string, open: boolean): Promise<SessionDto[]> {
@@ -298,6 +405,11 @@ export class AccessService {
       include: {
         vehicleType: { select: { name: true } },
         booking: { select: { code: true, endAt: true } },
+        payments: {
+          where: { purpose: 'GATE_CHARGE', status: 'CREATED' },
+          select: { amountPaise: true },
+          take: 1,
+        },
       },
       orderBy: { entryAt: 'desc' },
       take: 200,
@@ -323,6 +435,7 @@ export class AccessService {
       paymentMethod: s.paymentMethod,
       dueNowPaise: live.get(s.id)?.dueNowPaise ?? 0,
       freeUntil: live.get(s.id)?.freeUntil ?? null,
+      onlineRequestPaise: s.exitAt ? null : (s.payments[0]?.amountPaise ?? null),
     }));
   }
 
@@ -427,7 +540,19 @@ export class AccessService {
         })
       : null;
     const late = due.overstayMinutes;
+    const pending = await this.prisma.payment.findFirst({
+      where: { sessionId: s.id, purpose: 'GATE_CHARGE', status: 'CREATED' },
+      orderBy: { createdAt: 'desc' },
+    });
     return {
+      canPayOnline: !!booking,
+      onlineRequest: pending
+        ? {
+            paymentId: pending.id,
+            amountPaise: pending.amountPaise,
+            requestedAt: pending.createdAt.toISOString(),
+          }
+        : null,
       action: 'EXIT',
       sessionId: s.id,
       plateNumber: s.plateNumber,
@@ -540,7 +665,7 @@ export class AccessService {
       total: number;
       breakdown: ChargeBreakdownDto | null;
     },
-    method: 'CASH' | 'UPI' | null,
+    method: 'CASH' | 'UPI' | 'RAZORPAY' | null,
   ): Promise<ScanResultDto> {
     const now = new Date();
     const closed = await this.prisma.parkingSession.updateMany({
@@ -595,7 +720,7 @@ export class AccessService {
       overstayMinutes: due.overstayMinutes,
       amountDuePaise: 0,
       charges: due.total ? due.breakdown : null,
-      message: `${formatPlate(s.plateNumber)} may leave${due.total ? ` (collected ₹${(due.total / 100).toFixed(0)} by ${method})` : ''}`,
+      message: `${formatPlate(s.plateNumber)} may leave${due.total ? (method === 'RAZORPAY' ? ` (paid ${formatRupees(due.total)} online)` : ` (collected ${formatRupees(due.total)} by ${method})`) : ''}`,
     };
   }
 

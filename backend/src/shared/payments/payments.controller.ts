@@ -1,4 +1,4 @@
-import { Controller, Headers, HttpCode, HttpStatus, Post, Req } from '@nestjs/common';
+import { Controller, Get, Headers, HttpCode, HttpStatus, Param, ParseUUIDPipe, Post, Req } from '@nestjs/common';
 import { ApiBearerAuth, ApiExcludeEndpoint, ApiTags } from '@nestjs/swagger';
 import { SkipThrottle } from '@nestjs/throttler';
 import { mockPaySchema, paymentOrderSchema } from '@qp/validation';
@@ -22,6 +22,14 @@ export class PaymentsController {
   @ApiZodBody(paymentOrderSchema)
   order(@CurrentUser() user: AuthUser, @ZodBody(paymentOrderSchema) body: z.output<typeof paymentOrderSchema>) {
     return this.payments.createOrder(user.id, body.bookingId);
+  }
+
+  /** An overstay charge the gate sent to this driver to pay online. */
+  @ApiBearerAuth()
+  @Roles('VEHICLE_OWNER')
+  @Get('gate/:id')
+  gateCharge(@CurrentUser() user: AuthUser, @Param('id', new ParseUUIDPipe()) id: string) {
+    return this.payments.gateCharge(user.id, id);
   }
 
   /** Development only (PAYMENTS_DRIVER=mock): simulate the checkout result. */

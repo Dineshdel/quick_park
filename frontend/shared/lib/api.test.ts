@@ -41,17 +41,28 @@ describe('api client', () => {
       .mockResolvedValueOnce(json(200, { accessToken: 'fresh', expiresIn: 900, user }))
       .mockResolvedValueOnce(json(200, { ok: true }));
     await expect(api('/me')).resolves.toEqual({ ok: true });
-    const auth = (i: number) => (fetchMock.mock.calls[i]![1]?.headers as Record<string, string>).Authorization;
+    const auth = (i: number) =>
+      (fetchMock.mock.calls[i]![1]?.headers as Record<string, string>).Authorization;
     expect(auth(0)).toBe('Bearer expired');
     expect(auth(2)).toBe('Bearer fresh');
   });
 
   it('throws ApiError with code and field details', async () => {
     fetchMock.mockResolvedValue(
-      json(400, { error: { code: 'VALIDATION_FAILED', message: 'Validation failed', details: [{ path: 'email', message: 'bad' }] } }),
+      json(400, {
+        error: {
+          code: 'VALIDATION_FAILED',
+          message: 'Validation failed',
+          details: [{ path: 'email', message: 'bad' }],
+        },
+      }),
     );
     const err = await api('/auth/register', { body: {} }).catch((e) => e);
     expect(err).toBeInstanceOf(ApiError);
-    expect(err).toMatchObject({ status: 400, code: 'VALIDATION_FAILED', details: [{ path: 'email', message: 'bad' }] });
+    expect(err).toMatchObject({
+      status: 400,
+      code: 'VALIDATION_FAILED',
+      details: [{ path: 'email', message: 'bad' }],
+    });
   });
 });
