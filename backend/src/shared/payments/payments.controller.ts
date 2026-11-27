@@ -1,7 +1,17 @@
-import { Controller, Get, Headers, HttpCode, HttpStatus, Param, ParseUUIDPipe, Post, Req } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Headers,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Req,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiExcludeEndpoint, ApiTags } from '@nestjs/swagger';
 import { SkipThrottle } from '@nestjs/throttler';
-import { mockPaySchema, paymentOrderSchema } from '@qp/validation';
+import { mockPaySchema, paymentOrderSchema, verifyPaymentSchema } from '@qp/validation';
 import { type Request } from 'express';
 import { type z } from 'zod';
 import { type AuthUser } from '../auth/auth.types';
@@ -20,8 +30,19 @@ export class PaymentsController {
   @Roles('VEHICLE_OWNER')
   @Post('order')
   @ApiZodBody(paymentOrderSchema)
-  order(@CurrentUser() user: AuthUser, @ZodBody(paymentOrderSchema) body: z.output<typeof paymentOrderSchema>) {
+  order(
+    @CurrentUser() user: AuthUser,
+    @ZodBody(paymentOrderSchema) body: z.output<typeof paymentOrderSchema>,
+  ) {
     return this.payments.createOrder(user.id, body.bookingId);
+  }
+
+  /** The signed-in customer's payment history. */
+  @ApiBearerAuth()
+  @Roles('VEHICLE_OWNER')
+  @Get('history')
+  history(@CurrentUser() user: AuthUser) {
+    return this.payments.history(user.id);
   }
 
   /** An overstay charge the gate sent to this driver to pay online. */
@@ -32,13 +53,29 @@ export class PaymentsController {
     return this.payments.gateCharge(user.id, id);
   }
 
+  /** After Razorpay Checkout succeeds: verifies the signature, then confirms from Razorpay's own record. */
+  @ApiBearerAuth()
+  @Roles('VEHICLE_OWNER')
+  @HttpCode(HttpStatus.OK)
+  @Post('verify')
+  @ApiZodBody(verifyPaymentSchema)
+  verify(
+    @CurrentUser() user: AuthUser,
+    @ZodBody(verifyPaymentSchema) body: z.output<typeof verifyPaymentSchema>,
+  ) {
+    return this.payments.verifyCheckout(user.id, body.orderId, body.paymentId, body.signature);
+  }
+
   /** Development only (PAYMENTS_DRIVER=mock): simulate the checkout result. */
   @ApiBearerAuth()
   @Roles('VEHICLE_OWNER')
   @HttpCode(HttpStatus.OK)
   @Post('mock/pay')
   @ApiZodBody(mockPaySchema)
-  mockPay(@CurrentUser() user: AuthUser, @ZodBody(mockPaySchema) body: z.output<typeof mockPaySchema>) {
+  mockPay(
+    @CurrentUser() user: AuthUser,
+    @ZodBody(mockPaySchema) body: z.output<typeof mockPaySchema>,
+  ) {
     return this.payments.mockPay(user.id, body.orderId, body.outcome);
   }
 

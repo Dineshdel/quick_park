@@ -1,19 +1,21 @@
 'use client';
 
 import type { PaymentOrderDto } from '@qp/types';
+import { razorpayMethodOptions, type PaymentChoice } from '@qp/validation';
 import { useState } from 'react';
 import { api, errorMessage } from '@/shared/lib/api';
 import { formatRupees } from '@/shared/lib/format';
 import { Alert } from '@/shared/ui/alert';
 import { Button } from '@/shared/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/ui/card';
-import { ErrorPopup, useConfirm } from '@/shared/ui/confirm-dialog';
+import { ErrorPopup } from '@/shared/ui/confirm-dialog';
+import { PaymentPicker } from './payment-picker';
 
 declare global {
   interface Window {
     Razorpay?: new (opts: Record<string, unknown>) => {
       open: () => void;
-      on: (e: string, cb: () => void) => void;
+      on: (e: string, cb: (r: { error?: { description?: string } }) => void) => void;
     };
   }
 }
@@ -29,9 +31,69 @@ export function loadRazorpay(): Promise<void> {
   });
 }
 
+interface RazorpaySuccess {
+  razorpay_payment_id: string;
+  razorpay_order_id: string;
+  razorpay_signature: string;
+}
+
 /**
- * Pays a held booking. Razorpay: opens Checkout; the booking is confirmed by the server webhook, so afterwards we
- * poll the booking. Mock (development): shows buttons that simulate success or failure.
+ * Opens Razorpay Checkout for an order. On success the signed result is sent to the API, which checks it with
+ * Razorpay and confirms at once (the webhook is the backup). `onPaid` runs after that, even if the verify call
+ * fails: the caller polls, and the webhook or the server's reconciliation still confirms the payment.
+ */
+export async function payWithRazorpay(
+  o: PaymentOrderDto,
+  description: string,
+  cb: {
+    /** Opens Checkout straight on this method (UPI app, UPI ID, card…); omitted = all methods. */
+    choice?: PaymentChoice;
+    onPaid: () => void;
+    onFailed: (reason: string) => void;
+    onDismiss: () => void;
+  },
+) {
+  await loadRazorpay();
+  const m = cb.choice ? razorpayMethodOptions(cb.choice) : null;
+  const rz = new window.Razorpay!({
+    key: o.keyId,
+    order_id: o.orderId,
+    amount: o.amountPaise,
+    currency: 'INR',
+    name: 'Quick Park',
+    description,
+    prefill: {
+      ...(o.prefill && {
+        name: o.prefill.name,
+        email: o.prefill.email,
+        contact: o.prefill.contact ?? undefined,
+      }),
+      ...m?.prefill,
+    },
+    ...(m && { config: m.config }),
+    theme: { color: '#1f2a5c' },
+    handler: (r: RazorpaySuccess) => {
+      void api('/payments/verify', {
+        body: {
+          orderId: r.razorpay_order_id,
+          paymentId: r.razorpay_payment_id,
+          signature: r.razorpay_signature,
+        },
+      })
+        .catch(() => null)
+        .finally(cb.onPaid);
+    },
+    modal: { ondismiss: cb.onDismiss },
+  });
+  rz.on('payment.failed', (r) =>
+    cb.onFailed(r?.error?.description ?? 'Payment failed. You can try again.'),
+  );
+  rz.open();
+}
+
+/**
+ * Pays a held booking: "Pay now" creates the order and opens the payment picker (UPI apps, UPI ID, card,
+ * net banking, QR). The server confirms the booking, so afterwards we poll it.
  */
 export function Checkout({
   bookingId,
@@ -44,13 +106,13 @@ export function Checkout({
   holdExpiresAt: string | null;
   onDone: () => void;
 }) {
-  const ask = useConfirm();
   const [order, setOrder] = useState<PaymentOrderDto | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [waiting, setWaiting] = useState(false);
 
   const waitForConfirmation = async () => {
+    setOrder(null);
     setWaiting(true);
     for (let i = 0; i < 20; i++) {
       const b = await api<{ status: string }>(`/bookings/${bookingId}`).catch(() => null);
@@ -62,49 +124,10 @@ export function Checkout({
   };
 
   const start = async () => {
-    if (
-      !(await ask({
-        title: `Pay ${formatRupees(amountPaise)}?`,
-        description: 'The payment window opens next.',
-        confirmLabel: 'Pay now',
-      }))
-    )
-      return;
     setBusy(true);
     setError(null);
     try {
-      const o = await api<PaymentOrderDto>('/payments/order', { body: { bookingId } });
-      setOrder(o);
-      if (o.provider === 'razorpay') {
-        await loadRazorpay();
-        const rz = new window.Razorpay!({
-          key: o.keyId,
-          order_id: o.orderId,
-          amount: o.amountPaise,
-          currency: 'INR',
-          name: 'Quick Park',
-          description: 'Parking booking',
-          handler: () => void waitForConfirmation(),
-          modal: { ondismiss: () => setBusy(false) },
-        });
-        rz.on('payment.failed', () => setError('Payment failed. You can try again.'));
-        rz.open();
-      }
-    } catch (e) {
-      setError(errorMessage(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const mockPay = async (outcome: 'success' | 'failure') => {
-    if (!order) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await api('/payments/mock/pay', { body: { orderId: order.orderId, outcome } });
-      if (outcome === 'failure') setError('Payment failed (simulated). Try again.');
-      else await waitForConfirmation();
+      setOrder(await api<PaymentOrderDto>('/payments/order', { body: { bookingId } }));
     } catch (e) {
       setError(errorMessage(e));
     } finally {
@@ -126,24 +149,23 @@ export function Checkout({
       </CardHeader>
       <CardContent className="grid gap-3">
         <ErrorPopup message={error} onClose={() => setError(null)} />
+        <PaymentPicker
+          order={order}
+          description="Parking booking"
+          onClose={() => setOrder(null)}
+          onPaid={() => void waitForConfirmation()}
+        />
         {waiting ? (
           <Alert>Confirming your payment…</Alert>
-        ) : order?.provider === 'mock' ? (
-          <div className="grid gap-2">
-            <Alert>Test mode: no real money moves. Choose the payment result.</Alert>
-            <div className="flex flex-wrap gap-2">
-              <Button loading={busy} onClick={() => mockPay('success')}>
-                Simulate successful payment
-              </Button>
-              <Button variant="outline" disabled={busy} onClick={() => mockPay('failure')}>
-                Simulate failure
-              </Button>
-            </div>
-          </div>
         ) : (
-          <Button size="lg" loading={busy} onClick={start}>
-            Pay now
-          </Button>
+          <>
+            <Button size="lg" loading={busy} onClick={start}>
+              Pay now
+            </Button>
+            <p className="text-center text-xs text-muted-foreground">
+              UPI (Google Pay, PhonePe, Paytm…) · Debit / credit card · Net banking
+            </p>
+          </>
         )}
       </CardContent>
     </Card>

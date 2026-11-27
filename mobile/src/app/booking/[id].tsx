@@ -89,40 +89,25 @@ export default function BookingScreen() {
     }
   };
 
+  /** Opens the payment screen: the customer picks a UPI app, UPI ID, card or net banking there. */
   const pay = async () => {
-    const ok = await confirm({
-      title: `Pay ${formatRupees(b.amountPaise)}?`,
-      description: 'The payment window opens next.',
-      confirmLabel: 'Pay now',
-    });
-    if (!ok) return;
     setBusy('pay');
     try {
       const order = await api<PaymentOrderDto>('/payments/order', { body: { bookingId: b.id } });
-      if (order.provider === 'mock') {
-        const success = await confirm({
-          title: 'Test payment',
-          description: 'Test mode: no real money moves. Choose the payment result.',
-          confirmLabel: 'Simulate success',
-          cancelLabel: 'Simulate failure',
-        });
-        await api('/payments/mock/pay', {
-          body: { orderId: order.orderId, outcome: success ? 'success' : 'failure' },
-        });
-        await refresh();
-        if (!success)
-          await showError(new Error('The payment failed. You can try again.'), 'Payment failed');
-      } else {
-        router.push({
-          pathname: '/pay/[id]',
-          params: {
-            id: b.id,
-            orderId: order.orderId,
-            keyId: order.keyId ?? '',
-            amount: String(order.amountPaise),
-          },
-        });
-      }
+      router.push({
+        pathname: '/pay/[id]',
+        params: {
+          id: b.id,
+          provider: order.provider,
+          orderId: order.orderId,
+          keyId: order.keyId ?? '',
+          amount: String(order.amountPaise),
+          description: `Parking booking · ${b.code}`,
+          name: order.prefill?.name ?? '',
+          email: order.prefill?.email ?? '',
+          contact: order.prefill?.contact ?? '',
+        },
+      });
     } catch (e) {
       await showError(e, 'Payment failed');
     } finally {

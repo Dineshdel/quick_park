@@ -5,22 +5,17 @@ import { useEffect, useState } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { refreshSession } from '@/lib/api';
 import { DialogProvider } from '@/ui/dialog';
+import { BackButton } from '@/ui/kit';
+import { useStackOptions } from '@/ui/navigation';
 import { ThemeProvider, useTheme } from '@/ui/theme';
 
 function Navigator() {
   const { theme } = useTheme();
+  const stack = useStackOptions();
   return (
     <>
       <StatusBar style={theme.mode === 'dark' ? 'light' : 'dark'} />
-      <Stack
-        screenOptions={{
-          headerStyle: { backgroundColor: theme.card },
-          headerTintColor: theme.text,
-          headerTitleStyle: { fontWeight: '700' },
-          contentStyle: { backgroundColor: theme.background },
-          headerBackTitle: 'Back',
-        }}
-      >
+      <Stack screenOptions={stack}>
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         <Stack.Screen name="(driver)" options={{ headerShown: false }} />
@@ -29,9 +24,19 @@ function Navigator() {
         <Stack.Screen name="place/[slug]" options={{ title: 'Parking' }} />
         <Stack.Screen name="book/[id]" options={{ title: 'Book a slot' }} />
         <Stack.Screen name="booking/[id]" options={{ title: 'Booking' }} />
-        <Stack.Screen name="pay/[id]" options={{ title: 'Payment', presentation: 'modal' }} />
+        <Stack.Screen
+          name="pay/[id]"
+          options={{
+            title: 'Payment',
+            presentation: 'modal',
+            animation: 'slide_from_bottom',
+            headerLeft: () => <BackButton icon="close" />,
+          }}
+        />
         <Stack.Screen name="gate-charge/[id]" options={{ title: 'Overstay charge' }} />
         <Stack.Screen name="vehicle/[id]" options={{ title: 'Vehicle QR sticker' }} />
+        <Stack.Screen name="payments-history" options={{ title: 'Payment history' }} />
+        <Stack.Screen name="queries" options={{ title: 'Help & queries' }} />
       </Stack>
     </>
   );

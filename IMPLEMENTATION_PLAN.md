@@ -15,7 +15,7 @@ Items marked **[PROPOSAL]** are my additions or interpretations that the PDF lea
 | M5 Locations, capacity, pricing | ✅ Done | platform e2e: draft → submit (needs approved KYC, slots, prices) → admin approve; other owner gets 404; public photos served |
 | M6 Search + availability | ✅ Done | platform e2e: PostGIS near/far, text/city search, quote rules, calendar; sweep-line availability |
 | M7 Bookings | ✅ Done | platform e2e: idempotency, hold, cancel + policy refund, extension, **20 parallel requests on 2 slots → exactly 2 bookings** |
-| M8 Payments | ✅ Done (mock driver + Razorpay adapter; Route transfers not wired, payouts are manual) | platform e2e: order → mock webhook → CONFIRMED, replay is a no-op, late payment auto-refunded; Razorpay HMAC unit-tested |
+| M8 Payments | ✅ Done (mock driver + Razorpay: Checkout verify, webhook, capture of authorized payments, reconciliation of lost webhooks, UPI app intents in the mobile WebView; Route transfers not wired, payouts are manual) | platform e2e: order → mock webhook → CONFIRMED, replay is a no-op, late payment auto-refunded; Razorpay HMAC + Checkout signature unit-tested; verify / capture / wrong-amount / reconcile against a fake gateway |
 | M9 Pass + notifications | ✅ Done | signed QR pass (JSON + PDF), confirmation email with QR, reminders, pass-expiring, owner new-booking, receipts, KYC/place decisions |
 | M10 Access + realtime | ✅ Done | platform e2e: forged pass, other owner, entry/second entry, overstay charge + payment method, sticker → walk-in, typed-plate exit; socket.io gateway |
 | M11 Owner dashboard + earnings | ✅ Done | earnings reconcile with payments/refunds; dashboard 30-day series; no customer email exposed |

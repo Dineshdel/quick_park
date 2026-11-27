@@ -16,7 +16,7 @@ export const useNotifications = (enabled = true) =>
   });
 
 /** Header bell with the unread count; opens the notifications screen. */
-export function NotificationBell() {
+export function NotificationBell({ color }: { color?: string } = {}) {
   const { theme } = useTheme();
   const unread = useNotifications().data?.unread ?? 0;
   return (
@@ -24,9 +24,8 @@ export function NotificationBell() {
       onPress={() => router.push('/notifications')}
       accessibilityLabel={unread ? `Notifications, ${unread} unread` : 'Notifications'}
       hitSlop={10}
-      style={{ marginRight: 16 }}
     >
-      <Ionicons name="notifications-outline" size={24} color={theme.text} />
+      <Ionicons name="notifications-outline" size={21} color={color ?? theme.text} />
       {unread > 0 && (
         <View
           style={{

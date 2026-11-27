@@ -54,6 +54,9 @@ export class SchedulerService implements OnApplicationBootstrap {
     const remember = (rows: { locationId: string; vehicleTypeId: string }[]) =>
       rows.forEach((r) => touched.set(`${r.locationId}:${r.vehicleTypeId}`, r));
 
+    // 0. Payments whose webhook never arrived (before holds lapse, so a paid booking confirms instead).
+    const paymentsReconciled = await this.payments.reconcilePending(now);
+
     // 1. Unpaid holds lapse.
     const holds = await this.prisma.booking.findMany({
       where: { status: 'PENDING_PAYMENT', holdExpiresAt: { lt: now } },
@@ -206,6 +209,7 @@ export class SchedulerService implements OnApplicationBootstrap {
       expiring: expiring.length,
       archivedEvents: archived.count,
       refundsRetried,
+      paymentsReconciled,
     };
     if (Object.values(summary).some(Boolean)) this.logger.log(`tick ${JSON.stringify(summary)}`);
     return summary;

@@ -2,21 +2,29 @@ import * as SecureStore from 'expo-secure-store';
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useColorScheme } from 'react-native';
 
-/** Same palette as the website: deep navy, warm ivory, a touch of gold. */
+/** Light: warm ivory, deep navy and a touch of gold (the app's signature look). */
 const light = {
   mode: 'light' as const,
-  background: '#fbf9f4',
+  background: '#f6f4ee',
   card: '#ffffff',
-  text: '#1d2340',
+  text: '#161b36',
   muted: '#6b7189',
-  border: '#e7e3d8',
-  field: '#f1f3f8',
-  fieldBorder: '#c8cddb',
+  border: '#ebe7dc',
+  field: '#f3f4f8',
+  fieldBorder: '#d6dae5',
   primary: '#1f2a5c',
   primaryText: '#fdfcf8',
+  /** Tinted surface behind icons and selected rows. */
+  primarySoft: '#e8ebf6',
   accent: '#eceff7',
+  /** Shadow colour for raised surfaces. */
+  shadow: '#1f2a5c',
+  /** Brand bar at the top of the main screens. */
+  header: '#1f2a5c',
+  headerText: '#fdfcf8',
   chrome: '#161c3a',
   chromeText: '#e9ebf3',
+  /** Highlight colour on the brand bar and hero cards. */
   gold: '#d6a73f',
   success: '#17875a',
   successBg: '#e3f4ec',
@@ -29,29 +37,34 @@ const light = {
 };
 export type Theme = Omit<typeof light, 'mode'> & { mode: 'light' | 'dark' };
 
+/** Same colours as the website (dark): neutral charcoal surfaces with a bright blue. */
 const dark: Theme = {
   mode: 'dark',
-  background: '#121731',
-  card: '#1a2142',
-  text: '#eef0f6',
-  muted: '#9aa1bb',
-  border: '#2a3157',
-  field: '#0f1430',
-  fieldBorder: '#3a4270',
-  primary: '#d6a73f',
-  primaryText: '#1a1405',
-  accent: '#242c55',
-  chrome: '#0d1126',
-  chromeText: '#e9ebf3',
-  gold: '#e3bb5e',
-  success: '#3fc28b',
-  successBg: '#123a2c',
-  warning: '#f0b24a',
-  warningBg: '#3d2c0c',
-  danger: '#f06a6a',
-  dangerBg: '#3f1719',
-  info: '#7aa2f2',
-  infoBg: '#1b2a52',
+  background: '#121314',
+  card: '#1d1e20',
+  text: '#f1f2f3',
+  muted: '#a2a5a8',
+  border: '#3a3c40',
+  field: '#26282b',
+  fieldBorder: '#4a4d52',
+  primary: '#2da6fa',
+  primaryText: '#0c1014',
+  primarySoft: '#16324a',
+  accent: '#2c2e31',
+  shadow: '#000000',
+  header: '#17191b',
+  headerText: '#e6e8ea',
+  chrome: '#181a1b',
+  chromeText: '#e6e8ea',
+  gold: '#27aeff',
+  success: '#41dca5',
+  successBg: '#10291f',
+  warning: '#ffb340',
+  warningBg: '#2e2108',
+  danger: '#ff6367',
+  dangerBg: '#2e1415',
+  info: '#60c2ff',
+  infoBg: '#102233',
 };
 
 const KEY = 'qp.theme';

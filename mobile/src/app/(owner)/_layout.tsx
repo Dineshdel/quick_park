@@ -1,30 +1,20 @@
-import Ionicons from '@expo/vector-icons/Ionicons';
 import { Redirect, Tabs } from 'expo-router';
 import { GateProvider } from '@/lib/gate';
 import { useSession } from '@/lib/hooks';
-import { useTheme } from '@/ui/theme';
+import { AppTabBar, tabIcon, useTabOptions } from '@/ui/navigation';
 
 /** Gate staff (parking owner) app: scan in/out, vehicles inside with live overstay, account. */
 export default function OwnerTabs() {
   const s = useSession();
-  const { theme } = useTheme();
+  const tabs = useTabOptions({ bell: false });
   if (s.status === 'anonymous') return <Redirect href="/login" />;
   if (s.status === 'authenticated' && s.user.role !== 'PARKING_OWNER') return <Redirect href="/" />;
-  const icon = (name: React.ComponentProps<typeof Ionicons>['name']) =>
-    function TabBarIcon({ color, size }: { color: unknown; size: number }) {
-      return <Ionicons name={name} size={size} color={color as string} />;
-    };
   return (
     <GateProvider>
       <Tabs
+        tabBar={(props) => <AppTabBar {...props} />}
         screenOptions={{
-          tabBarActiveTintColor: theme.primary,
-          tabBarInactiveTintColor: theme.muted,
-          tabBarStyle: { backgroundColor: theme.card, borderTopColor: theme.border },
-          headerStyle: { backgroundColor: theme.card },
-          headerTintColor: theme.text,
-          headerTitleStyle: { fontWeight: '700' },
-          sceneStyle: { backgroundColor: theme.background },
+          ...tabs,
         }}
       >
         <Tabs.Screen
@@ -32,16 +22,23 @@ export default function OwnerTabs() {
           options={{
             title: 'Gate scanner',
             tabBarLabel: 'Scanner',
-            tabBarIcon: icon('qr-code-outline'),
+            tabBarIcon: tabIcon('qr-code-outline', 'qr-code'),
           }}
         />
         <Tabs.Screen
           name="inside"
-          options={{ title: 'Inside now', tabBarLabel: 'Inside', tabBarIcon: icon('car-outline') }}
+          options={{
+            title: 'Inside now',
+            tabBarLabel: 'Inside',
+            tabBarIcon: tabIcon('car-outline', 'car'),
+          }}
         />
         <Tabs.Screen
           name="account"
-          options={{ title: 'Account', tabBarIcon: icon('person-circle-outline') }}
+          options={{
+            title: 'Account',
+            tabBarIcon: tabIcon('person-circle-outline', 'person-circle'),
+          }}
         />
       </Tabs>
     </GateProvider>

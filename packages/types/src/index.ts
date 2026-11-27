@@ -433,6 +433,8 @@ export interface PaymentOrderDto {
   /** Razorpay key id for Checkout (razorpay only). */
   keyId: string | null;
   bookingId: string;
+  /** Fills in Checkout's contact fields so the customer isn't asked again. */
+  prefill?: { name: string; email: string; contact: string | null };
 }
 
 export interface PassDto {
@@ -633,4 +635,33 @@ export interface ReportRowDto {
 /** "₹1,234.50" */
 export function formatRupees(paise: number): string {
   return `₹${(paise / 100).toLocaleString('en-IN', { minimumFractionDigits: paise % 100 ? 2 : 0, maximumFractionDigits: 2 })}`;
+}
+
+/** One line of the customer's payment history. */
+export interface PaymentHistoryItemDto {
+  id: string;
+  bookingId: string;
+  bookingCode: string;
+  placeName: string;
+  purpose: 'BOOKING' | 'EXTENSION' | 'GATE_CHARGE';
+  status: 'PAID' | 'FAILED';
+  amountPaise: number;
+  /** Refunds already processed for this payment. */
+  refundedPaise: number;
+  createdAt: string;
+  paidAt: string | null;
+}
+
+/** A query (dispute) the customer raised about one of their bookings. */
+export interface MyQueryDto {
+  id: string;
+  bookingId: string;
+  bookingCode: string;
+  placeName: string;
+  reason: string;
+  status: DisputeStatus;
+  resolution: string | null;
+  refundPaise: number;
+  createdAt: string;
+  resolvedAt: string | null;
 }

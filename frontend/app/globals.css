@@ -4,53 +4,58 @@
 
 :root {
   --radius: 0.875rem;
-  /* Violet Night: deep indigo chrome, electric violet → indigo actions, mint for "free / available".
-     (The --gold* token names are kept from the first palette; they now carry the violet/orchid accent.) */
-  --background: oklch(0.978 0.008 235);
-  --foreground: oklch(0.22 0.05 248);
+  /* Classic light: neutral paper-white surfaces, deep ink text, and blue only on actions and accents
+     (the same rule as dark mode). The --gold* token names are kept from the first palette; they carry the
+     blue accent. */
+  --background: oklch(0.975 0.002 250);
+  --foreground: oklch(0.19 0.02 258);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.22 0.05 248);
+  --card-foreground: oklch(0.19 0.02 258);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.22 0.05 248);
-  --primary: oklch(0.56 0.19 254);
-  --primary-foreground: oklch(0.99 0.005 250);
-  --secondary: oklch(0.955 0.025 235);
-  --secondary-foreground: oklch(0.36 0.15 248);
-  --muted: oklch(0.955 0.012 250);
-  --muted-foreground: oklch(0.5 0.04 248);
-  --accent: oklch(0.95 0.028 235);
-  --accent-foreground: oklch(0.36 0.15 248);
-  --gold: oklch(0.64 0.17 240);
-  --gold-deep: oklch(0.5 0.19 254);
-  /* Accent text/icons on the chrome panels (deep violet on the light panels). */
-  --gold-light: oklch(0.52 0.19 252);
-  --gold-foreground: oklch(0.99 0.005 250);
-  --destructive: oklch(0.58 0.22 22);
-  --success: oklch(0.62 0.15 163);
-  --mint: oklch(0.82 0.15 165);
-  --border: oklch(0.91 0.018 250);
-  --input: oklch(0.88 0.02 250);
-  --ring: oklch(0.62 0.17 245);
-  /* Chrome (header, hero, page bands, sidebars, footer) is light: pale lavender with pastel glows. */
-  --chrome: oklch(0.978 0.013 235);
-  --chrome-foreground: oklch(0.34 0.08 252);
-  --chrome-muted: oklch(0.5 0.05 248);
-  --chrome-hover: oklch(0.94 0.03 235);
-  --chrome-strong: oklch(0.24 0.08 255);
-  --chrome-line: oklch(0.88 0.035 250);
-  --glow-a: oklch(0.85 0.09 240 / 0.6);
-  --glow-b: oklch(0.9 0.07 205 / 0.55);
-  --glow-c: oklch(0.86 0.08 262 / 0.45);
-  --grid-line: oklch(0.5 0.12 248 / 0.09);
-  --glass-bg: oklch(1 0 0 / 0.62);
-  --glass-border: oklch(0.85 0.05 251 / 0.8);
+  --popover-foreground: oklch(0.19 0.02 258);
+  --primary: oklch(0.53 0.18 256);
+  --primary-foreground: oklch(0.99 0.002 250);
+  --secondary: oklch(0.955 0.003 250);
+  --secondary-foreground: oklch(0.25 0.02 258);
+  --muted: oklch(0.955 0.003 250);
+  --muted-foreground: oklch(0.47 0.012 258);
+  --accent: oklch(0.945 0.006 250);
+  --accent-foreground: oklch(0.25 0.02 258);
+  --gold: oklch(0.6 0.16 245);
+  --gold-deep: oklch(0.48 0.17 256);
+  /* Accent text/icons on the chrome panels. */
+  --gold-light: oklch(0.5 0.17 254);
+  --gold-foreground: oklch(0.99 0.002 250);
+  --destructive: oklch(0.56 0.21 25);
+  --success: oklch(0.56 0.13 160);
+  --mint: oklch(0.78 0.14 165);
+  --border: oklch(0.91 0.004 250);
+  --input: oklch(0.87 0.005 250);
+  --ring: oklch(0.6 0.15 250);
+  /* Chrome (header, hero, page bands, footer) is crisp white, a step above the off-white page. */
+  --chrome: oklch(1 0 0);
+  --chrome-foreground: oklch(0.3 0.018 258);
+  --chrome-muted: oklch(0.5 0.012 258);
+  --chrome-hover: oklch(0.955 0.003 250);
+  --chrome-strong: oklch(0.17 0.022 258);
+  --chrome-line: oklch(0.9 0.004 250);
+  /* Side menu: a light sky blue panel, so it reads as its own column next to the white page. */
+  --sidebar: oklch(0.95 0.03 238);
+  --sidebar-hover: oklch(0.915 0.045 238);
+  /* Glows stay mostly neutral, with one faint touch of blue (mirrors dark mode). */
+  --glow-a: oklch(0.93 0.004 250 / 0.7);
+  --glow-b: oklch(0.85 0.07 245 / 0.18);
+  --glow-c: oklch(0.94 0.004 250 / 0.6);
+  --grid-line: oklch(0.3 0.01 255 / 0.05);
+  --glass-bg: oklch(1 0 0 / 0.78);
+  --glass-border: oklch(0.89 0.004 250);
   /* Hero car-park drawing: light concrete deck. */
-  --deck-top: oklch(0.995 0.006 250);
-  --deck-bottom: oklch(0.94 0.025 245);
-  --deck-edge: oklch(0.86 0.05 245);
-  --deck-line: oklch(0.55 0.1 248 / 0.35);
-  --field: oklch(0.97 0.015 250);
-  --field-border: oklch(0.84 0.04 250);
+  --deck-top: oklch(0.995 0.001 250);
+  --deck-bottom: oklch(0.95 0.003 250);
+  --deck-edge: oklch(0.88 0.005 250);
+  --deck-line: oklch(0.45 0.02 255 / 0.3);
+  --field: oklch(1 0 0);
+  --field-border: oklch(0.86 0.006 250);
   color-scheme: light;
 }
 
@@ -95,6 +100,8 @@
   --chrome-hover: oklch(0.29 0.005 250);
   --chrome-strong: oklch(1 0 0);
   --chrome-line: oklch(1 0 0 / 0.12);
+  --sidebar: var(--chrome);
+  --sidebar-hover: var(--chrome-hover);
   --glow-a: oklch(0.5 0.01 250 / 0.35);
   --glow-b: oklch(0.6 0.12 240 / 0.14);
   --glow-c: oklch(0.42 0.008 250 / 0.4);
@@ -204,7 +211,8 @@
 }
 /* Sidebar panel: the same midnight, with the glow at the top. */
 @utility bg-chrome-panel {
-  background-color: var(--chrome);
+  --chrome-hover: var(--sidebar-hover);
+  background-color: var(--sidebar);
   background-image: radial-gradient(500px 300px at 0% 0%, var(--glow-a), transparent 70%);
 }
 /* Thin champagne line used under the header and between sections. */
@@ -220,13 +228,13 @@
 /* Layered, soft shadow that reads as "lifted" rather than "boxed". */
 @utility shadow-premium {
   box-shadow:
-    0 1px 2px oklch(0.2 0.075 248 / 0.06),
-    0 8px 24px -8px oklch(0.2 0.075 248 / 0.14);
+    0 1px 2px oklch(0.2 0.02 258 / 0.06),
+    0 8px 24px -8px oklch(0.2 0.02 258 / 0.14);
 }
 @utility shadow-premium-lg {
   box-shadow:
-    0 2px 4px oklch(0.2 0.075 248 / 0.06),
-    0 24px 48px -16px oklch(0.2 0.075 248 / 0.28);
+    0 2px 4px oklch(0.2 0.02 258 / 0.06),
+    0 24px 48px -16px oklch(0.2 0.02 258 / 0.28);
 }
 /* Faint dot grid for hero backgrounds. */
 @utility bg-dots {
@@ -302,9 +310,9 @@ html:lang(hi) [class*='tracking-'] {
   background-image: linear-gradient(180deg, oklch(1 0 0 / 0.65), oklch(1 0 0 / 0) 42%);
   box-shadow:
     inset 0 1px 0 oklch(1 0 0 / 0.9),
-    0 1px 2px oklch(0.2 0.075 248 / 0.06),
-    0 6px 14px -6px oklch(0.2 0.075 248 / 0.12),
-    0 22px 40px -22px oklch(0.2 0.075 248 / 0.3);
+    0 1px 2px oklch(0.2 0.02 258 / 0.06),
+    0 6px 14px -6px oklch(0.2 0.02 258 / 0.12),
+    0 22px 40px -22px oklch(0.2 0.02 258 / 0.3);
 }
 :root.dark .surface-3d {
   background-image: linear-gradient(180deg, oklch(1 0 0 / 0.05), oklch(1 0 0 / 0) 42%);
@@ -315,6 +323,31 @@ html:lang(hi) [class*='tracking-'] {
     0 26px 46px -22px oklch(0 0 0 / 0.65);
 }
 
+/* 3D buttons: a soft top light, a darker bottom edge (like a key) and a coloured drop shadow. */
+@utility sheen-3d {
+  background-image: linear-gradient(180deg, oklch(1 0 0 / 0.2), oklch(1 0 0 / 0) 55%);
+}
+@utility edge-3d {
+  box-shadow:
+    inset 0 1px 0 oklch(1 0 0 / 0.35),
+    inset 0 -2px 0 oklch(0 0 0 / 0.16),
+    0 2px 0 color-mix(in oklch, var(--primary) 62%, black),
+    0 10px 18px -8px color-mix(in oklch, var(--primary) 60%, transparent);
+}
+/* The same key-cap edge for white (outline) buttons. */
+@utility edge-3d-soft {
+  box-shadow:
+    inset 0 1px 0 oklch(1 0 0),
+    0 2px 0 var(--input),
+    0 6px 12px -8px oklch(0.2 0.02 258 / 0.25);
+}
+:root.dark .edge-3d-soft {
+  box-shadow:
+    inset 0 1px 0 oklch(1 0 0 / 0.08),
+    0 2px 0 oklch(0 0 0 / 0.45),
+    0 6px 12px -8px oklch(0 0 0 / 0.6);
+}
+
 /* Glass panel for content laid over midnight banners. */
 @utility glass {
   background-color: var(--glass-bg);
@@ -323,7 +356,7 @@ html:lang(hi) [class*='tracking-'] {
   -webkit-backdrop-filter: blur(14px) saturate(140%);
   box-shadow:
     inset 0 1px 0 oklch(1 0 0 / 0.5),
-    0 18px 36px -20px oklch(0.4 0.15 248 / 0.35);
+    0 18px 36px -20px oklch(0.25 0.02 258 / 0.25);
 }
 /* Dark glass for labels laid over photos (always dark, whatever the theme). */
 @utility glass-dark {
@@ -335,13 +368,13 @@ html:lang(hi) [class*='tracking-'] {
 
 /* Extruded icon tile: the midnight block with a visible bottom "edge", like a key cap. */
 @utility icon-3d {
-  background-image: linear-gradient(160deg, oklch(0.99 0.008 251), oklch(0.92 0.045 251));
-  border: 1px solid oklch(0.86 0.05 251);
+  background-image: linear-gradient(160deg, oklch(1 0 0), oklch(0.95 0.003 250));
+  border: 1px solid oklch(0.88 0.005 250);
   box-shadow:
     inset 0 1px 0 oklch(1 0 0),
-    inset 0 -2px 0 oklch(0.5 0.15 250 / 0.12),
-    0 3px 0 oklch(0.84 0.06 251),
-    0 10px 18px -6px oklch(0.5 0.2 250 / 0.35);
+    inset 0 -2px 0 oklch(0.3 0.02 258 / 0.08),
+    0 3px 0 oklch(0.87 0.005 250),
+    0 10px 18px -6px oklch(0.25 0.02 258 / 0.22);
 }
 /* Dark-mode key cap: the original indigo block. */
 :root.dark .icon-3d {
@@ -564,17 +597,17 @@ html:lang(hi) [class*='tracking-'] {
   z-index: -1;
   pointer-events: none;
   background:
-    radial-gradient(900px 600px at 8% 12%, oklch(0.6 0.135 248 / 0.1), transparent 60%),
-    radial-gradient(700px 500px at 92% 30%, oklch(0.8 0.176 254 / 0.1), transparent 60%),
-    radial-gradient(900px 700px at 50% 110%, oklch(0.55 0.12 238 / 0.09), transparent 60%);
+    radial-gradient(900px 600px at 8% 12%, oklch(0.9 0.004 250 / 0.5), transparent 60%),
+    radial-gradient(700px 500px at 92% 30%, oklch(0.8 0.08 245 / 0.06), transparent 60%),
+    radial-gradient(900px 700px at 50% 110%, oklch(0.9 0.004 250 / 0.5), transparent 60%);
 }
 .qp-ambient::before {
   content: '';
   position: absolute;
   inset: 0;
   background-image:
-    linear-gradient(oklch(0.3 0.075 248 / 0.045) 1px, transparent 1px),
-    linear-gradient(90deg, oklch(0.3 0.075 248 / 0.045) 1px, transparent 1px);
+    linear-gradient(oklch(0.3 0.01 255 / 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, oklch(0.3 0.01 255 / 0.035) 1px, transparent 1px);
   background-size: 56px 56px;
   mask-image: radial-gradient(ellipse 80% 60% at 50% 30%, black, transparent 75%);
 }

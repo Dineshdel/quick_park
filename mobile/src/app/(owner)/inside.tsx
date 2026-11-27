@@ -69,7 +69,10 @@ export default function Inside() {
                 <Badge label="Overstaying" tone="danger" />
               ) : null}
               {s.onlineRequestPaise ? (
-                <Badge label={`Online ${formatRupees(s.onlineRequestPaise)} requested`} tone="info" />
+                <Badge
+                  label={`Online ${formatRupees(s.onlineRequestPaise)} requested`}
+                  tone="info"
+                />
               ) : null}
             </Row>
             <Text variant="small">

@@ -14,7 +14,7 @@ import { Alert } from '@/shared/ui/alert';
 import { Button } from '@/shared/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/ui/card';
 import { ErrorPopup } from '@/shared/ui/confirm-dialog';
-import { loadRazorpay } from '../../_components/checkout';
+import { PaymentPicker } from '../../_components/payment-picker';
 
 /** 97 → "1 h 37 min". */
 const fmtDur = (min: number) =>
@@ -27,7 +27,7 @@ const fmtDur = (min: number) =>
 export default function PayGateChargePage() {
   const { id } = useParams<{ id: string }>();
   const qc = useQueryClient();
-  const [busy, setBusy] = useState(false);
+  const [picking, setPicking] = useState(false);
   const [waiting, setWaiting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const key = ['gate-charge', id];
@@ -39,6 +39,7 @@ export default function PayGateChargePage() {
   const c = q.data;
 
   const waitForPaid = async () => {
+    setPicking(false);
     setWaiting(true);
     for (let i = 0; i < 20; i++) {
       const r = await api<GateChargeDto>(`/payments/gate/${id}`).catch(() => null);
@@ -48,45 +49,6 @@ export default function PayGateChargePage() {
     setWaiting(false);
     await qc.invalidateQueries({ queryKey: key });
     void qc.invalidateQueries({ queryKey: ['notifications'] });
-  };
-
-  const payRazorpay = async () => {
-    if (!c?.order) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await loadRazorpay();
-      const rz = new window.Razorpay!({
-        key: c.order.keyId,
-        order_id: c.order.orderId,
-        amount: c.order.amountPaise,
-        currency: 'INR',
-        name: 'Quick Park',
-        description: `Overstay charge · ${c.bookingCode}`,
-        handler: () => void waitForPaid(),
-        modal: { ondismiss: () => setBusy(false) },
-      });
-      rz.on('payment.failed', () => setError('Payment failed. You can try again.'));
-      rz.open();
-    } catch (e) {
-      setError(errorMessage(e));
-      setBusy(false);
-    }
-  };
-
-  const mockPay = async (outcome: 'success' | 'failure') => {
-    if (!c?.order) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await api('/payments/mock/pay', { body: { orderId: c.order.orderId, outcome } });
-      if (outcome === 'failure') setError('Payment failed (simulated). Try again.');
-      else await waitForPaid();
-    } catch (e) {
-      setError(errorMessage(e));
-    } finally {
-      setBusy(false);
-    }
   };
 
   if (q.isPending)
@@ -156,22 +118,18 @@ export default function PayGateChargePage() {
             c.order &&
             (waiting ? (
               <Alert>Confirming your payment…</Alert>
-            ) : c.order.provider === 'mock' ? (
-              <div className="grid gap-2">
-                <Alert>Test mode: no real money moves. Choose the payment result.</Alert>
-                <div className="flex flex-wrap gap-2">
-                  <Button loading={busy} onClick={() => mockPay('success')}>
-                    Simulate successful payment
-                  </Button>
-                  <Button variant="outline" disabled={busy} onClick={() => mockPay('failure')}>
-                    Simulate failure
-                  </Button>
-                </div>
-              </div>
             ) : (
-              <Button size="lg" loading={busy} onClick={payRazorpay}>
-                Pay {formatRupees(c.amountPaise)} now
-              </Button>
+              <>
+                <Button size="lg" onClick={() => setPicking(true)}>
+                  Pay {formatRupees(c.amountPaise)} now
+                </Button>
+                <PaymentPicker
+                  order={picking ? c.order : null}
+                  description={`Overstay charge · ${c.bookingCode}`}
+                  onClose={() => setPicking(false)}
+                  onPaid={() => void waitForPaid()}
+                />
+              </>
             ))}
 
           <Button variant="ghost" asChild>

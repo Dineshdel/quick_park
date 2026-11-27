@@ -143,7 +143,7 @@ export function PlaceSearchInput({
             }
           }
         }}
-        className="flex h-10 w-full rounded-md border border-input bg-transparent py-2 pr-9 pl-9 text-base shadow-xs outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 md:text-sm"
+        className="flex h-10 w-full rounded-md border border-field-border bg-field py-2 pr-9 pl-9 text-base shadow-xs outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 md:text-sm"
       />
       {busy && (
         <Loader2

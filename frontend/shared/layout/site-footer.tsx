@@ -6,31 +6,15 @@ import { usePathname } from 'next/navigation';
 import { useT } from '@/shared/i18n/i18n';
 import type { MessageKey } from '@/shared/i18n/messages';
 
-const COLUMNS: { title: MessageKey; links: { href: string; label: MessageKey }[] }[] = [
-  {
-    title: 'footer.drivers',
-    links: [
-      { href: '/search', label: 'footer.findParking' },
-      { href: '/vehicle-owner/bookings', label: 'footer.myBookings' },
-      { href: '/vehicle-owner/vehicles', label: 'footer.myVehicles' },
-    ],
-  },
-  {
-    title: 'footer.owners',
-    links: [
-      { href: '/register?role=PARKING_OWNER', label: 'footer.listParking' },
-      { href: '/parking-owner', label: 'footer.ownerDashboard' },
-      { href: '/parking-owner/scanner', label: 'footer.gateScanner' },
-    ],
-  },
-  {
-    title: 'footer.account',
-    links: [
-      { href: '/login', label: 'nav.signIn' },
-      { href: '/register', label: 'nav.createAccount' },
-      { href: '/account', label: 'footer.profile' },
-    ],
-  },
+/** Links in the slim footer bar (sign in / create account are already in the header). */
+const LINKS: { href: string; label: MessageKey }[] = [
+  { href: '/search', label: 'footer.findParking' },
+  { href: '/vehicle-owner/bookings', label: 'footer.myBookings' },
+  { href: '/vehicle-owner/vehicles', label: 'footer.myVehicles' },
+  { href: '/register?role=PARKING_OWNER', label: 'footer.listParking' },
+  { href: '/parking-owner', label: 'footer.ownerDashboard' },
+  { href: '/parking-owner/scanner', label: 'footer.gateScanner' },
+  { href: '/account', label: 'footer.profile' },
 ];
 
 export function SiteFooter() {
@@ -39,41 +23,30 @@ export function SiteFooter() {
   const t = useT();
   if (['/admin', '/parking-owner', '/vehicle-owner'].some((p) => path.startsWith(p))) return null;
   return (
-    <footer className="bg-midnight mt-16 text-chrome-foreground print:hidden">
-      <div className="hairline-gold h-px opacity-50" aria-hidden />
-      <div className="mx-auto grid max-w-6xl gap-10 px-4 py-12 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1fr]">
-        <div className="grid content-start gap-3">
-          <Link href="/" className="flex items-center gap-2.5">
-            <span className="bg-gold-gradient flex size-8 items-center justify-center rounded-lg text-gold-foreground">
-              <Car className="size-[18px]" aria-hidden />
-            </span>
-            <span className="font-serif text-lg font-semibold text-chrome-strong">
-              Quick <span className="text-gold-gradient">Park</span>
-            </span>
-          </Link>
-          <p className="max-w-xs text-sm text-chrome-muted">{t('footer.tagline')}</p>
-        </div>
-        {COLUMNS.map((c) => (
-          <div key={c.title} className="grid content-start gap-3">
-            <p className="text-sm font-semibold text-chrome-strong">{t(c.title)}</p>
-            <ul className="grid gap-2 text-sm">
-              {c.links.map((l) => (
-                <li key={l.href}>
-                  <Link
-                    href={l.href}
-                    className="text-chrome-foreground/80 transition-colors hover:text-chrome-strong"
-                  >
-                    {t(l.label)}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
-      </div>
-      <div className="border-t border-chrome-line">
-        <p className="mx-auto max-w-6xl px-4 py-5 text-xs text-chrome-muted">
-          {t('footer.copyright', { year: new Date().getFullYear() })}
+    // Slim bar that stays pinned to the bottom of the window while the page scrolls.
+    <footer className="bg-midnight sticky bottom-0 z-[999] mt-16 border-t border-chrome-line text-chrome-foreground shadow-[0_-6px_18px_-12px_oklch(0.3_0.1_248/0.35)] print:hidden">
+      <div className="mx-auto flex h-12 max-w-6xl items-center gap-6 px-4">
+        <Link href="/" className="flex shrink-0 items-center gap-2">
+          <span className="bg-gold-gradient flex size-6 items-center justify-center rounded-md text-gold-foreground">
+            <Car className="size-3.5" aria-hidden />
+          </span>
+          <span className="font-serif text-sm font-semibold text-chrome-strong">
+            Quick <span className="text-gold-gradient">Park</span>
+          </span>
+        </Link>
+        <nav aria-label="Footer" className="hidden flex-1 items-center gap-5 text-xs lg:flex">
+          {LINKS.map((l) => (
+            <Link
+              key={l.href}
+              href={l.href}
+              className="whitespace-nowrap text-chrome-foreground/85 transition-colors hover:text-chrome-strong"
+            >
+              {t(l.label)}
+            </Link>
+          ))}
+        </nav>
+        <p className="ml-auto shrink-0 text-xs text-chrome-muted">
+          © {new Date().getFullYear()} Quick Park
         </p>
       </div>
     </footer>

@@ -1,18 +1,27 @@
 import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { type GateChargeDto, type PaymentOrderDto } from '@qp/types';
+import { type GateChargeDto, type PaymentHistoryItemDto, type PaymentOrderDto } from '@qp/types';
 import { AuditService } from '../audit/audit.service';
 import { AvailabilityService } from '../availability/availability.service';
 import { PrismaService } from '../database/prisma.service';
 import { AppException, Errors } from '../http/app-exception';
 import { NotificationsService } from '../notifications/notifications.service';
 import { RealtimeGateway } from '../realtime/realtime.gateway';
-import { PAYMENT_PROVIDER, type PaidEvent, type PaymentProvider } from './payment-provider';
+import {
+  PAYMENT_PROVIDER,
+  type PaidEvent,
+  type PaymentProvider,
+  type ProviderPayment,
+} from './payment-provider';
 
 export const REFUND_MAX_ATTEMPTS = 6;
 
 /** Booking money only: online gate charges (overstay) are counted with the gate takings instead. */
 const BOOKING_MONEY = { purpose: { not: 'GATE_CHARGE' as const } };
+
+/** Reconciliation looks at unpaid orders between these ages (younger ones are still in Checkout). */
+const RECONCILE_MIN_AGE_MS = 2 * 60_000;
+const RECONCILE_MAX_AGE_MS = 2 * 60 * 60_000;
 
 /** Called once an online gate charge is paid; the gate module registers it (it closes the session). */
 export type GateChargePaidHandler = (paymentId: string) => Promise<void>;
@@ -36,7 +45,10 @@ export class PaymentsService {
 
   /** Creates (or reuses) a gateway order for the customer's held booking. */
   async createOrder(userId: string, bookingId: string): Promise<PaymentOrderDto> {
-    const b = await this.prisma.booking.findFirst({ where: { id: bookingId, userId } });
+    const b = await this.prisma.booking.findFirst({
+      where: { id: bookingId, userId },
+      include: { user: { select: { name: true, email: true, phone: true } } },
+    });
     if (!b) throw Errors.notFound('Booking');
     if (b.status !== 'PENDING_PAYMENT' || !b.holdExpiresAt || b.holdExpiresAt <= new Date()) {
       throw new AppException(
@@ -68,7 +80,33 @@ export class PaymentsService {
       currency: 'INR',
       keyId: this.provider.keyId,
       bookingId,
+      prefill: { name: b.user.name, email: b.user.email, contact: b.user.phone },
     };
+  }
+
+  /** The customer's paid and failed payments, newest first (abandoned, never-paid orders are left out). */
+  async history(userId: string): Promise<PaymentHistoryItemDto[]> {
+    const rows = await this.prisma.payment.findMany({
+      where: { booking: { userId }, status: { in: ['PAID', 'FAILED'] } },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+      include: {
+        booking: { select: { code: true, location: { select: { name: true } } } },
+        refunds: { where: { status: 'PROCESSED' }, select: { amountPaise: true } },
+      },
+    });
+    return rows.map((p) => ({
+      id: p.id,
+      bookingId: p.bookingId,
+      bookingCode: p.booking.code,
+      placeName: p.booking.location.name,
+      purpose: p.purpose as PaymentHistoryItemDto['purpose'],
+      status: p.status as PaymentHistoryItemDto['status'],
+      amountPaise: p.amountPaise,
+      refundedPaise: p.refunds.reduce((s, r) => s + r.amountPaise, 0),
+      createdAt: p.createdAt.toISOString(),
+      paidAt: p.paidAt?.toISOString() ?? null,
+    }));
   }
 
   onGateChargePaid(handler: GateChargePaidHandler) {
@@ -113,7 +151,13 @@ export class PaymentsService {
     const p = await this.prisma.payment.findUnique({
       where: { id: paymentId },
       include: {
-        booking: { select: { userId: true, code: true } },
+        booking: {
+          select: {
+            userId: true,
+            code: true,
+            user: { select: { name: true, email: true, phone: true } },
+          },
+        },
         session: {
           select: {
             plateNumber: true,
@@ -145,6 +189,11 @@ export class PaymentsService {
               currency: 'INR',
               keyId: this.provider.keyId,
               bookingId: p.bookingId,
+              prefill: {
+                name: p.booking.user.name,
+                email: p.booking.user.email,
+                contact: p.booking.user.phone,
+              },
             }
           : null,
     };
@@ -154,8 +203,128 @@ export class PaymentsService {
   async handleWebhook(raw: Buffer | undefined, signature?: string, eventId?: string) {
     if (!raw) throw new AppException(HttpStatus.BAD_REQUEST, 'WEBHOOK_INVALID', 'Missing body');
     const event = this.provider.parseWebhook(raw, signature, eventId);
-    if (event) await this.process(event, JSON.parse(raw.toString('utf8')) as Prisma.InputJsonValue);
+    if (event?.type === 'authorized') {
+      // Manual-capture account: capture it now. Razorpay then sends payment.captured, which confirms.
+      // Never fail the webhook over this: reconciliation and the Checkout verify call retry it.
+      await this.settleProviderPayment(event.orderId, event.paymentId).catch((e: unknown) =>
+        this.logger.error(`capturing ${event.paymentId} failed: ${(e as Error).message}`),
+      );
+    } else if (event) {
+      await this.process(event, JSON.parse(raw.toString('utf8')) as Prisma.InputJsonValue);
+    }
     return { ok: true };
+  }
+
+  /**
+   * Called by the browser / app right after Checkout succeeds, with what Checkout handed it. The signature proves
+   * the ids came from Razorpay; the payment is then fetched from Razorpay itself (amount, status) before anything
+   * is confirmed, so this is as trustworthy as the webhook and does not depend on the webhook arriving.
+   */
+  async verifyCheckout(userId: string, orderId: string, paymentId: string, signature: string) {
+    if (this.provider.name === 'mock') throw Errors.notFound('Endpoint');
+    const row = await this.prisma.payment.findUnique({
+      where: { providerOrderId: orderId },
+      include: { booking: { select: { userId: true } } },
+    });
+    if (!row || row.booking.userId !== userId) throw Errors.notFound('Payment');
+    if (!this.provider.verifyCheckout(orderId, paymentId, signature))
+      throw Errors.badRequest('PAYMENT_INVALID', 'This payment could not be verified');
+    if (row.status !== 'PAID') await this.settleProviderPayment(orderId, paymentId);
+    const after = await this.prisma.payment.findUniqueOrThrow({
+      where: { id: row.id },
+      select: { status: true },
+    });
+    return { ok: true, paid: after.status === 'PAID' };
+  }
+
+  /** Fetches a payment from the gateway and settles it against our order. */
+  private async settleProviderPayment(orderId: string, paymentId: string) {
+    const row = await this.prisma.payment.findUnique({
+      where: { providerOrderId: orderId },
+      select: { providerOrderId: true, amountPaise: true, status: true },
+    });
+    if (!row || row.status === 'PAID') return false;
+    return this.settle(row, await this.provider.fetchPayment(paymentId));
+  }
+
+  /**
+   * Captures a gateway payment if it is only authorized, then processes it as paid (idempotent: the event id is
+   * per gateway payment, and process() ignores an already PAID order). An authorized payment of the wrong amount
+   * is left uncaptured, so Razorpay releases the money back to the customer by itself.
+   */
+  private async settle(row: { providerOrderId: string; amountPaise: number }, gp: ProviderPayment) {
+    if (gp.orderId !== row.providerOrderId) {
+      this.logger.warn(`payment ${gp.id} belongs to ${gp.orderId}, not ${row.providerOrderId}`);
+      return false;
+    }
+    let p = gp;
+    if (p.status === 'authorized') {
+      if (p.amountPaise !== row.amountPaise) {
+        this.logger.error(`not capturing ${p.id}: ${p.amountPaise} vs ${row.amountPaise}`);
+        return false;
+      }
+      p = await this.provider.capture(p.id, p.amountPaise).catch(async (e: unknown) => {
+        // Captured meanwhile (auto-capture, or a parallel webhook / verify call)?
+        const again = await this.provider.fetchPayment(gp.id);
+        if (again.status !== 'captured') throw e;
+        return again;
+      });
+    }
+    if (p.status !== 'captured') return false;
+    await this.process(
+      {
+        eventId: `captured:${p.id}`,
+        type: 'paid',
+        orderId: p.orderId,
+        paymentId: p.id,
+        amountPaise: p.amountPaise,
+      },
+      {
+        source: 'gateway-fetch',
+        id: p.id,
+        order_id: p.orderId,
+        status: p.status,
+        amount: p.amountPaise,
+      },
+    );
+    return true;
+  }
+
+  /**
+   * Scheduler: asks the gateway about recent unpaid orders, in case a webhook was lost or never configured
+   * (and the customer closed the page before the verify call). Every tick for the first 15 minutes,
+   * then every 10 minutes, up to 2 hours.
+   */
+  async reconcilePending(now = new Date()) {
+    if (this.provider.name === 'mock') return 0;
+    const rows = await this.prisma.payment.findMany({
+      where: {
+        provider: this.provider.name,
+        status: { in: ['CREATED', 'FAILED'] },
+        createdAt: {
+          gte: new Date(now.getTime() - RECONCILE_MAX_AGE_MS),
+          lte: new Date(now.getTime() - RECONCILE_MIN_AGE_MS),
+        },
+      },
+      select: { providerOrderId: true, amountPaise: true, createdAt: true },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+    let settled = 0;
+    for (const r of rows) {
+      const ageMin = Math.floor((now.getTime() - r.createdAt.getTime()) / 60_000);
+      if (ageMin > 15 && ageMin % 10 !== 0) continue;
+      try {
+        const attempts = await this.provider.orderPayments(r.providerOrderId);
+        const gp =
+          attempts.find((a) => a.status === 'captured') ??
+          attempts.find((a) => a.status === 'authorized');
+        if (gp && (await this.settle(r, gp))) settled++;
+      } catch (e) {
+        this.logger.warn(`reconcile ${r.providerOrderId} failed: ${(e as Error).message}`);
+      }
+    }
+    return settled;
   }
 
   /** Mock driver only: the customer's simulated checkout result. Ownership is checked. */
@@ -179,6 +348,7 @@ export class PaymentsService {
 
   /** Idempotent: a replayed event id is a no-op. */
   async process(event: PaidEvent, payload: Prisma.InputJsonValue) {
+    if (event.type === 'authorized') return; // not money yet: settle() captures it first
     let confirmedBookingId: string | null = null;
     let gateChargePaidId: string | null = null;
     let autoRefund: { paymentId: string; amount: number; reason?: string } | null = null;
@@ -299,10 +469,13 @@ export class PaymentsService {
     });
     if (gateChargePaidId) {
       // Never fail the webhook here: the event is already recorded, so a retry would be ignored.
-      if (!this.gateChargePaid) this.logger.error(`no handler for paid gate charge ${gateChargePaidId}`);
+      if (!this.gateChargePaid)
+        this.logger.error(`no handler for paid gate charge ${gateChargePaidId}`);
       else
         await this.gateChargePaid(gateChargePaidId).catch((e: unknown) =>
-          this.logger.error(`closing session for gate charge ${gateChargePaidId} failed: ${(e as Error).message}`),
+          this.logger.error(
+            `closing session for gate charge ${gateChargePaidId} failed: ${(e as Error).message}`,
+          ),
         );
     }
     if (confirmedBookingId && touched) {

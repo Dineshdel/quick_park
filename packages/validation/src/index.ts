@@ -6,3 +6,5 @@ export * from './owners';
 export * from './locations';
 export * from './bookings';
 export * from './admin';
+export * from './payments';
+export * from './brand-logos';

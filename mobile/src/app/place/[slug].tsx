@@ -3,11 +3,12 @@ import { PLAN_RULES } from '@qp/validation';
 import { useQuery } from '@tanstack/react-query';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Linking, Platform, View } from 'react-native';
+import { View } from 'react-native';
 import { api, ApiError } from '@/lib/api';
 import { formatRupees } from '@/lib/format';
 import { useSession } from '@/lib/hooks';
 import { Badge, Button, Card, Empty, KV, Loading, Row, Screen, Segmented, Text } from '@/ui/kit';
+import { MapsSheet } from '@/ui/maps-sheet';
 import { PhotoGallery } from '@/ui/photos';
 import { useTheme } from '@/ui/theme';
 
@@ -17,6 +18,7 @@ export default function PlaceScreen() {
   const { slug } = useLocalSearchParams<{ slug: string }>();
   const { theme } = useTheme();
   const s = useSession();
+  const [mapsOpen, setMapsOpen] = useState(false);
   const place = useQuery({
     queryKey: ['place', slug],
     queryFn: () => api<LocationDto>(`/parkings/${slug}`),
@@ -62,12 +64,7 @@ export default function PlaceScreen() {
 
   const plans = PLAN_ORDER.filter((pl) => p.prices.some((x) => x.planType === pl && x.isActive));
   const zoneFree = Object.fromEntries((avail.data?.zones ?? []).map((z) => [z.zoneId, z.free]));
-  const directions = () =>
-    void Linking.openURL(
-      Platform.OS === 'ios'
-        ? `http://maps.apple.com/?daddr=${p.lat},${p.lng}`
-        : `https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}`,
-    );
+  const directions = () => setMapsOpen(true);
   const book = () =>
     s.status === 'authenticated'
       ? router.push({ pathname: '/book/[id]', params: { id: p.id, vehicleType } })
@@ -76,6 +73,13 @@ export default function PlaceScreen() {
   return (
     <>
       <Stack.Screen options={{ title: p.name }} />
+      <MapsSheet
+        open={mapsOpen}
+        onClose={() => setMapsOpen(false)}
+        lat={p.lat}
+        lng={p.lng}
+        label={p.name}
+      />
       <Screen
         onRefresh={() => void Promise.all([place.refetch(), avail.refetch()])}
         refreshing={place.isRefetching}

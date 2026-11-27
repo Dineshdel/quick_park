@@ -1,6 +1,10 @@
 import { createHmac } from 'node:crypto';
 import { AvailabilityService } from '../src/shared/availability/availability.service';
-import { PAYMENT_PROVIDER, RazorpayPaymentProvider } from '../src/shared/payments/payment-provider';
+import {
+  PAYMENT_PROVIDER,
+  type ProviderPayment,
+  RazorpayPaymentProvider,
+} from '../src/shared/payments/payment-provider';
 import { PaymentsService } from '../src/shared/payments/payments.service';
 import { SchedulerService } from '../src/shared/scheduler/scheduler.service';
 import {
@@ -550,20 +554,31 @@ describe('M10 gate access', () => {
       quantity: 1,
     });
     const code = (await as(customer).get(`/bookings/${id}`).expect(200)).body.code as string;
-    await as(owner).post('/access/scan', { token: code, locationId, direction: 'ENTRY' }).expect(200);
+    await as(owner)
+      .post('/access/scan', { token: code, locationId, direction: 'ENTRY' })
+      .expect(200);
     await ctx.prisma.booking.update({
       where: { id },
-      data: { startAt: new Date(Date.now() - 3 * 3_600_000), endAt: new Date(Date.now() - 50 * 60_000) },
+      data: {
+        startAt: new Date(Date.now() - 3 * 3_600_000),
+        endAt: new Date(Date.now() - 50 * 60_000),
+      },
     });
     const out = await as(owner)
       .post('/access/scan', { token: code, locationId, direction: 'EXIT' })
       .expect(200);
-    expect(out.body).toMatchObject({ amountDuePaise: 5000, canPayOnline: true, onlineRequest: null });
+    expect(out.body).toMatchObject({
+      amountDuePaise: 5000,
+      canPayOnline: true,
+      onlineRequest: null,
+    });
     const sessionId = out.body.sessionId as string;
     const paidBefore = (await as(customer).get(`/bookings/${id}`).expect(200)).body;
 
     // Gate chooses "Online": the driver gets a notification with the amount.
-    const sent = await as(owner).post(`/access/sessions/${sessionId}/request-online`, {}).expect(200);
+    const sent = await as(owner)
+      .post(`/access/sessions/${sessionId}/request-online`, {})
+      .expect(200);
     expect(sent.body.onlineRequest).toMatchObject({ amountPaise: 5000 });
     const inside = await as(owner).get(`/access/sessions?locationId=${locationId}`).expect(200);
     expect(inside.body.find((x: { id: string }) => x.id === sessionId)).toMatchObject({
@@ -579,7 +594,11 @@ describe('M10 gate access', () => {
     // Only that driver can see it.
     await as(otherOwner).get(`/payments/gate/${paymentId}`).expect(403);
     const charge = await as(customer).get(`/payments/gate/${paymentId}`).expect(200);
-    expect(charge.body).toMatchObject({ status: 'PENDING', amountPaise: 5000, plateNumber: 'KA05GH0005' });
+    expect(charge.body).toMatchObject({
+      status: 'PENDING',
+      amountPaise: 5000,
+      plateNumber: 'KA05GH0005',
+    });
 
     // Driver pays → session closed by itself, booking completed, "paid" notification.
     await as(customer)
@@ -610,10 +629,15 @@ describe('M10 gate access', () => {
       quantity: 1,
     });
     const code = (await as(customer).get(`/bookings/${id}`).expect(200)).body.code as string;
-    await as(owner).post('/access/scan', { token: code, locationId, direction: 'ENTRY' }).expect(200);
+    await as(owner)
+      .post('/access/scan', { token: code, locationId, direction: 'ENTRY' })
+      .expect(200);
     await ctx.prisma.booking.update({
       where: { id },
-      data: { startAt: new Date(Date.now() - 3 * 3_600_000), endAt: new Date(Date.now() - 50 * 60_000) },
+      data: {
+        startAt: new Date(Date.now() - 3 * 3_600_000),
+        endAt: new Date(Date.now() - 50 * 60_000),
+      },
     });
     const out = await as(owner)
       .post('/access/scan', { token: code, locationId, direction: 'EXIT' })
@@ -1057,7 +1081,67 @@ describe('Razorpay webhook signature (unit)', () => {
     expect(() => rp.parseWebhook(body, 'deadbeef', 'evt_1')).toThrow();
     expect(() => rp.parseWebhook(body, undefined, 'evt_1')).toThrow();
   });
+
+  it('parses payment.authorized so the service can capture it', () => {
+    const b = Buffer.from(
+      JSON.stringify({
+        event: 'payment.authorized',
+        payload: { payment: { entity: { id: 'pay_2', order_id: 'order_2', amount: 700 } } },
+      }),
+    );
+    const sig = createHmac('sha256', 'whsec').update(b).digest('hex');
+    expect(rp.parseWebhook(b, sig, 'evt_2')).toMatchObject({
+      type: 'authorized',
+      paymentId: 'pay_2',
+    });
+  });
+
+  it('checks the Checkout signature over "order_id|payment_id" with the key secret', () => {
+    const sig = createHmac('sha256', 'secret').update('order_1|pay_1').digest('hex');
+    expect(rp.verifyCheckout('order_1', 'pay_1', sig)).toBe(true);
+    expect(rp.verifyCheckout('order_1', 'pay_X', sig)).toBe(false);
+    expect(rp.verifyCheckout('order_1', 'pay_1', 'deadbeef')).toBe(false);
+  });
 });
+
+/** Razorpay with the network calls replaced by an in-memory gateway (real signature checks). */
+class FakeRazorpay extends RazorpayPaymentProvider {
+  readonly gateway = new Map<string, ProviderPayment>();
+  readonly captured: string[] = [];
+  private n = 0;
+  constructor() {
+    super('rzp_test_fake', 'fake_key_secret', 'fake_whsec');
+  }
+  override async createOrder() {
+    return { orderId: `order_fake_${Date.now()}_${++this.n}` };
+  }
+  override async fetchPayment(id: string) {
+    const p = this.gateway.get(id);
+    if (!p) throw new Error('no such payment');
+    return { ...p };
+  }
+  override async orderPayments(orderId: string) {
+    return [...this.gateway.values()].filter((p) => p.orderId === orderId).map((p) => ({ ...p }));
+  }
+  override async capture(id: string) {
+    const p = this.gateway.get(id)!;
+    p.status = 'captured';
+    this.captured.push(id);
+    return { ...p };
+  }
+  override async refund() {
+    return { refundId: `rfnd_fake_${++this.n}` };
+  }
+  /** A payment made on the gateway + the signature Checkout would hand the browser. */
+  pay(orderId: string, amountPaise: number, status: ProviderPayment['status'] = 'captured') {
+    const id = `pay_fake_${++this.n}`;
+    this.gateway.set(id, { id, orderId, amountPaise, status });
+    const signature = createHmac('sha256', 'fake_key_secret')
+      .update(`${orderId}|${id}`)
+      .digest('hex');
+    return { paymentId: id, signature };
+  }
+}
 
 describe('go-live hardening', () => {
   /** A bookable car place (2 online of 3 slots, ₹40/h, ₹50/h overstay) made ACTIVE directly. */
@@ -1682,5 +1766,153 @@ describe('go-live hardening', () => {
       new Date(Date.now() + 6 * 3_600_000),
     );
     expect({ soon, later }).toEqual({ soon: 1, later: 2 });
+  });
+
+  it('lists the customer\'s own payment history and queries, nobody else\'s', async () => {
+    const place = await newPlace(owner, 'History Parking');
+    const a = await newCustomerVehicle('TN10HS0001');
+    const other = await newCustomerVehicle('TN10HS0002');
+    const id = await bookAndPay(a.c, {
+      locationId: place,
+      vehicleId: a.v,
+      planType: 'HOURLY',
+      startAt: inMinutes(24 * 60),
+      quantity: 1,
+    });
+    await as(a.c).post(`/bookings/${id}/disputes`, { reason: 'Gate staff asked me to pay again' });
+
+    const h = await as(a.c).get('/payments/history').expect(200);
+    expect(h.body).toHaveLength(1);
+    expect(h.body[0]).toMatchObject({
+      bookingId: id,
+      placeName: 'History Parking',
+      status: 'PAID',
+      purpose: 'BOOKING',
+      refundedPaise: 0,
+    });
+    const qs = await as(a.c).get('/bookings/queries').expect(200);
+    expect(qs.body).toHaveLength(1);
+    expect(qs.body[0]).toMatchObject({ bookingId: id, status: 'OPEN', placeName: 'History Parking' });
+
+    expect((await as(other.c).get('/payments/history').expect(200)).body).toEqual([]);
+    expect((await as(other.c).get('/bookings/queries').expect(200)).body).toEqual([]);
+  });
+
+  describe('Razorpay checkout verification + reconciliation', () => {
+    const fake = new FakeRazorpay();
+    let real: unknown;
+    const svc = () => ctx.app.get(PaymentsService) as unknown as { provider: unknown };
+    beforeAll(() => {
+      real = svc().provider;
+      svc().provider = fake;
+    });
+    afterAll(() => {
+      svc().provider = real;
+    });
+
+    async function hold(c: string, v: string, place: string, hours: number) {
+      const b = await as(c)
+        .post(
+          '/bookings',
+          {
+            locationId: place,
+            vehicleId: v,
+            planType: 'HOURLY',
+            startAt: inMinutes(hours * 60),
+            quantity: 1,
+          },
+          { 'Idempotency-Key': key() },
+        )
+        .expect(201);
+      const o = await as(c).post('/payments/order', { bookingId: b.body.id }).expect(201);
+      expect(o.body).toMatchObject({ provider: 'razorpay', keyId: 'rzp_test_fake' });
+      expect(o.body.prefill.email).toContain('@');
+      return {
+        bookingId: b.body.id as string,
+        orderId: o.body.orderId as string,
+        amount: o.body.amountPaise as number,
+      };
+    }
+
+    it('confirms a booking from the signed Checkout result, once, for its owner only', async () => {
+      const place = await newPlace(owner, 'Verify Parking');
+      const a = await newCustomerVehicle('TN10VF0001');
+      const other = await newCustomerVehicle('TN10VF0002');
+      const h = await hold(a.c, a.v, place, 24);
+      const { paymentId, signature } = fake.pay(h.orderId, h.amount);
+
+      await as(a.c)
+        .post('/payments/verify', { orderId: h.orderId, paymentId, signature: 'ab'.repeat(32) })
+        .expect(400);
+      await as(other.c)
+        .post('/payments/verify', { orderId: h.orderId, paymentId, signature })
+        .expect(404);
+      expect((await as(a.c).get(`/bookings/${h.bookingId}`)).body.status).toBe('PENDING_PAYMENT');
+
+      const r = await as(a.c)
+        .post('/payments/verify', { orderId: h.orderId, paymentId, signature })
+        .expect(200);
+      expect(r.body).toEqual({ ok: true, paid: true });
+      expect((await as(a.c).get(`/bookings/${h.bookingId}`)).body.status).toBe('CONFIRMED');
+
+      // Repeat verify and the later webhook are no-ops.
+      await as(a.c)
+        .post('/payments/verify', { orderId: h.orderId, paymentId, signature })
+        .expect(200);
+      const hook = Buffer.from(
+        JSON.stringify({
+          event: 'payment.captured',
+          payload: {
+            payment: { entity: { id: paymentId, order_id: h.orderId, amount: h.amount } },
+          },
+        }),
+      );
+      await ctx
+        .http()
+        .post(`${API}/payments/webhook/razorpay`)
+        .set('Content-Type', 'application/json')
+        .set('X-Razorpay-Signature', createHmac('sha256', 'fake_whsec').update(hook).digest('hex'))
+        .set('X-Razorpay-Event-Id', `evt_${paymentId}`)
+        .send(hook.toString())
+        .expect(200);
+      expect(
+        await ctx.prisma.payment.count({ where: { bookingId: h.bookingId, status: 'PAID' } }),
+      ).toBe(1);
+    });
+
+    it('captures an authorized payment, but never one of the wrong amount', async () => {
+      const place = await newPlace(owner, 'Capture Parking');
+      const a = await newCustomerVehicle('TN10VF0003');
+      const ok = await hold(a.c, a.v, place, 24);
+      const p1 = fake.pay(ok.orderId, ok.amount, 'authorized');
+      await as(a.c)
+        .post('/payments/verify', { orderId: ok.orderId, ...p1 })
+        .expect(200);
+      expect(fake.captured).toContain(p1.paymentId);
+      expect((await as(a.c).get(`/bookings/${ok.bookingId}`)).body.status).toBe('CONFIRMED');
+
+      const bad = await hold(a.c, a.v, place, 30);
+      const p2 = fake.pay(bad.orderId, bad.amount - 100, 'authorized');
+      const r = await as(a.c)
+        .post('/payments/verify', { orderId: bad.orderId, ...p2 })
+        .expect(200);
+      expect(r.body.paid).toBe(false);
+      expect(fake.captured).not.toContain(p2.paymentId);
+      expect((await as(a.c).get(`/bookings/${bad.bookingId}`)).body.status).toBe('PENDING_PAYMENT');
+    });
+
+    it('reconciles a paid order whose webhook and verify call never arrived', async () => {
+      const place = await newPlace(owner, 'Reconcile Parking');
+      const a = await newCustomerVehicle('TN10VF0004');
+      const h = await hold(a.c, a.v, place, 24);
+      fake.pay(h.orderId, h.amount);
+      const payments = ctx.app.get(PaymentsService);
+
+      // Too fresh: the customer may still be in Checkout.
+      expect(await payments.reconcilePending(new Date())).toBe(0);
+      expect(await payments.reconcilePending(new Date(Date.now() + 3 * 60_000))).toBe(1);
+      expect((await as(a.c).get(`/bookings/${h.bookingId}`)).body.status).toBe('CONFIRMED');
+      expect(await payments.reconcilePending(new Date(Date.now() + 4 * 60_000))).toBe(0);
+    });
   });
 });

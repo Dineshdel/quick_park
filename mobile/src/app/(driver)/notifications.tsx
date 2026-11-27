@@ -16,7 +16,8 @@ export default function NotificationsScreen() {
   const refresh = () => qc.invalidateQueries({ queryKey: ['notifications'] });
 
   const open = async (n: NotificationDto) => {
-    if (!n.read) void api(`/notifications/${n.id}/read`, { body: {} }).then(refresh, () => undefined);
+    if (!n.read)
+      void api(`/notifications/${n.id}/read`, { body: {} }).then(refresh, () => undefined);
     if (n.paymentId) router.push({ pathname: '/gate-charge/[id]', params: { id: n.paymentId } });
   };
 

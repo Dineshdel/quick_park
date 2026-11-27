@@ -93,6 +93,16 @@ export const mockPaySchema = z.object({
   outcome: z.enum(['success', 'failure']).default('success'),
 });
 
+/** What Razorpay Checkout hands the browser after a successful payment. */
+export const verifyPaymentSchema = z.object({
+  orderId: z.string().trim().min(1).max(64),
+  paymentId: z.string().trim().min(1).max(64),
+  signature: z
+    .string()
+    .trim()
+    .regex(/^[0-9a-f]{64}$/i, 'Invalid signature'),
+});
+
 export const scanSchema = z.object({
   token: z.string().trim().min(4).max(300),
   locationId: z.uuid(),

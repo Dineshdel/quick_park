@@ -1,11 +1,9 @@
 import type { GateChargeDto } from '@qp/types';
 import { formatPlate } from '@qp/validation';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
 import { api, errorMessage } from '@/lib/api';
 import { fmtDateTime, fmtDur, formatRupees } from '@/lib/format';
-import { useDialog } from '@/ui/dialog';
 import { Button, Card, KV, Loading, Notice, Screen, Text } from '@/ui/kit';
 import { useTheme } from '@/ui/theme';
 
@@ -16,9 +14,6 @@ import { useTheme } from '@/ui/theme';
 export default function GateChargeScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { theme } = useTheme();
-  const { confirm, showError } = useDialog();
-  const qc = useQueryClient();
-  const [busy, setBusy] = useState(false);
   const q = useQuery({
     queryKey: ['gate-charge', id],
     queryFn: () => api<GateChargeDto>(`/payments/gate/${id}`),
@@ -26,49 +21,24 @@ export default function GateChargeScreen() {
   });
   const c = q.data;
 
-  const pay = async () => {
+  /** Opens the payment screen: the customer picks a UPI app, UPI ID, card or net banking there. */
+  const pay = () => {
     if (!c?.order) return;
     const order = c.order;
-    if (
-      !(await confirm({
-        title: `Pay ${formatRupees(c.amountPaise)}?`,
-        description: 'The payment window opens next.',
-        confirmLabel: 'Pay now',
-      }))
-    )
-      return;
-    setBusy(true);
-    try {
-      if (order.provider === 'mock') {
-        const success = await confirm({
-          title: 'Test payment',
-          description: 'Test mode: no real money moves. Choose the payment result.',
-          confirmLabel: 'Simulate success',
-          cancelLabel: 'Simulate failure',
-        });
-        await api('/payments/mock/pay', {
-          body: { orderId: order.orderId, outcome: success ? 'success' : 'failure' },
-        });
-        if (!success)
-          await showError(new Error('The payment failed. You can try again.'), 'Payment failed');
-        await q.refetch();
-        void qc.invalidateQueries({ queryKey: ['notifications'] });
-      } else {
-        router.push({
-          pathname: '/pay/[id]',
-          params: {
-            id: c.paymentId,
-            orderId: order.orderId,
-            keyId: order.keyId ?? '',
-            amount: String(order.amountPaise),
-          },
-        });
-      }
-    } catch (e) {
-      await showError(e, 'Payment failed');
-    } finally {
-      setBusy(false);
-    }
+    router.push({
+      pathname: '/pay/[id]',
+      params: {
+        id: c.paymentId,
+        provider: order.provider,
+        orderId: order.orderId,
+        keyId: order.keyId ?? '',
+        amount: String(order.amountPaise),
+        description: `Overstay charge · ${c.bookingCode}`,
+        name: order.prefill?.name ?? '',
+        email: order.prefill?.email ?? '',
+        contact: order.prefill?.contact ?? '',
+      },
+    });
   };
 
   if (q.isPending) return <Loading />;
@@ -109,7 +79,6 @@ export default function GateChargeScreen() {
           <Button
             title={`Pay ${formatRupees(c.amountPaise)} now`}
             size="lg"
-            loading={busy}
             onPress={() => void pay()}
           />
         ) : null}

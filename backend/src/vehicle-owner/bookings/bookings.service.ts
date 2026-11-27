@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { Prisma, type BookingStatus } from '@prisma/client';
-import { type BookingDto, type CancellationRule, type PassDto } from '@qp/types';
+import { type BookingDto, type CancellationRule, type MyQueryDto, type PassDto } from '@qp/types';
 import { refundPctFor, type bookingCreateSchema } from '@qp/validation';
 import { type z } from 'zod';
 import { AvailabilityService } from '../../shared/availability/availability.service';
@@ -481,5 +481,27 @@ export class BookingsService {
       where: { bookingId: id },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  /** Every query the customer raised, across their bookings (newest first). */
+  async myQueries(userId: string): Promise<MyQueryDto[]> {
+    const rows = await this.prisma.dispute.findMany({
+      where: { raisedById: userId },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+      include: { booking: { select: { code: true, location: { select: { name: true } } } } },
+    });
+    return rows.map((d) => ({
+      id: d.id,
+      bookingId: d.bookingId,
+      bookingCode: d.booking.code,
+      placeName: d.booking.location.name,
+      reason: d.reason,
+      status: d.status,
+      resolution: d.resolution,
+      refundPaise: d.refundPaise,
+      createdAt: d.createdAt.toISOString(),
+      resolvedAt: d.resolvedAt?.toISOString() ?? null,
+    }));
   }
 }
